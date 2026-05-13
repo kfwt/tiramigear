@@ -1,0 +1,61 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-heading: Kanit, Arial, sans-serif;
+  --font-body: Ubuntu, Arial, sans-serif;
+  --sidebar: #000047;
+  --cyan: #00cccc;
+  --mint: #9acec7;
+  --bg: #ffffff;
+  --bg2: #f5f6fa;
+  --line: #dfe3ef;
+  --text: #1a1a3e;
+  --text2: #5c5f7a;
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger: #e53e3e;
+}
+
+[data-theme="dark"] {
+  --cyan: #00ffff;
+  --bg: #0f0f1a;
+  --bg2: #161628;
+  --line: #2a2c48;
+  --text: #e8e8f8;
+  --text2: #a7a8c3;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+  background: var(--bg2);
+}
+
+body {
+  min-height: 100%;
+  margin: 0;
+  background: var(--bg2);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 13px;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+::selection {
+  background: var(--cyan);
+  color: #001a2a;
+}

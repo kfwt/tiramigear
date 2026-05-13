@@ -1,0 +1,1037 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>tiramigear Wireframe v0.1</title>
+    <style>
+      :root {
+        --sidebar: #000047;
+        --cyan: #00cccc;
+        --mint: #9acec7;
+        --bg: #ffffff;
+        --bg2: #f5f6fa;
+        --line: #dfe3ef;
+        --text: #1a1a3e;
+        --text2: #5c5f7a;
+        --success: #16a34a;
+        --warning: #d97706;
+        --danger: #e53e3e;
+        --shadow: 0 12px 30px rgba(0, 0, 71, 0.08);
+      }
+
+      [data-theme="dark"] {
+        --cyan: #00ffff;
+        --bg: #0f0f1a;
+        --bg2: #161628;
+        --line: #2a2c48;
+        --text: #e8e8f8;
+        --text2: #a7a8c3;
+        --shadow: 0 12px 32px rgba(0, 0, 0, 0.28);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg2);
+        color: var(--text);
+        font-family: Ubuntu, Arial, sans-serif;
+        font-size: 13px;
+      }
+
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+
+      .app {
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: 248px minmax(0, 1fr);
+      }
+
+      .sidebar {
+        background: var(--sidebar);
+        color: #ffffff;
+        padding: 22px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .brand-mark {
+        width: 38px;
+        height: 38px;
+        border: 2px solid var(--cyan);
+        display: grid;
+        place-items: center;
+        border-radius: 8px;
+        font-family: Kanit, Arial, sans-serif;
+        font-weight: 700;
+      }
+
+      .brand-title {
+        font-family: Kanit, Arial, sans-serif;
+        font-size: 18px;
+        font-weight: 700;
+      }
+
+      .brand-subtitle {
+        color: #b9c4ff;
+        font-size: 11px;
+      }
+
+      .nav {
+        display: grid;
+        gap: 6px;
+      }
+
+      .nav button {
+        width: 100%;
+        min-height: 38px;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        color: #eef2ff;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 12px;
+        text-align: left;
+        cursor: pointer;
+      }
+
+      .nav button[aria-selected="true"],
+      .nav button:hover {
+        background: rgba(0, 204, 204, 0.16);
+        color: #ffffff;
+      }
+
+      .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        border: 1px solid currentColor;
+        flex: 0 0 auto;
+      }
+
+      .sidebar-footer {
+        margin-top: auto;
+        padding: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 8px;
+        color: #d9e5ff;
+      }
+
+      .workspace {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .topbar {
+        min-height: 68px;
+        background: var(--bg);
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 0 24px;
+      }
+
+      .title-block h1 {
+        margin: 0;
+        font-family: Kanit, Arial, sans-serif;
+        font-size: 24px;
+        line-height: 1.1;
+      }
+
+      .title-block p {
+        margin: 4px 0 0;
+        color: var(--text2);
+      }
+
+      .actions {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      .btn {
+        min-height: 36px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--bg);
+        color: var(--text);
+        padding: 0 12px;
+        cursor: pointer;
+      }
+
+      .btn.primary {
+        background: var(--cyan);
+        border-color: var(--cyan);
+        color: #001a2a;
+        font-weight: 700;
+      }
+
+      .content {
+        padding: 24px;
+        display: grid;
+        gap: 20px;
+      }
+
+      .view {
+        display: none;
+        gap: 20px;
+      }
+
+      .view.active {
+        display: grid;
+      }
+
+      .grid-4 {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .grid-3 {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .grid-main {
+        display: grid;
+        grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.8fr);
+        gap: 16px;
+      }
+
+      .panel,
+      .metric,
+      .table-shell {
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        box-shadow: var(--shadow);
+      }
+
+      .metric {
+        min-height: 110px;
+        padding: 16px;
+        display: grid;
+        align-content: space-between;
+      }
+
+      .metric strong {
+        font-family: Kanit, Arial, sans-serif;
+        font-size: 28px;
+        line-height: 1;
+      }
+
+      .metric span,
+      .muted {
+        color: var(--text2);
+      }
+
+      .panel {
+        padding: 16px;
+        display: grid;
+        gap: 14px;
+        align-content: start;
+      }
+
+      .panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+        gap: 12px;
+      }
+
+      .panel h2,
+      .panel h3 {
+        margin: 0;
+        font-family: Kanit, Arial, sans-serif;
+        line-height: 1.2;
+      }
+
+      .panel h2 {
+        font-size: 18px;
+      }
+
+      .panel h3 {
+        font-size: 14px;
+      }
+
+      .toolbar {
+        display: grid;
+        grid-template-columns: minmax(220px, 1fr) 160px 160px auto;
+        gap: 10px;
+      }
+
+      .field {
+        min-height: 36px;
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--bg2);
+        color: var(--text);
+        padding: 0 10px;
+      }
+
+      .table-shell {
+        overflow: auto;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 720px;
+      }
+
+      th,
+      td {
+        padding: 12px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        white-space: nowrap;
+      }
+
+      th {
+        color: var(--text2);
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 24px;
+        border-radius: 999px;
+        padding: 0 8px;
+        font-size: 11px;
+        font-weight: 700;
+        background: var(--bg2);
+      }
+
+      .status.good {
+        color: var(--success);
+      }
+
+      .status.warn {
+        color: var(--warning);
+      }
+
+      .status.bad {
+        color: var(--danger);
+      }
+
+      .progress {
+        height: 9px;
+        border-radius: 999px;
+        background: var(--bg2);
+        overflow: hidden;
+      }
+
+      .progress span {
+        display: block;
+        height: 100%;
+        background: var(--cyan);
+      }
+
+      .progress.good span {
+        background: var(--success);
+      }
+
+      .progress.warn span {
+        background: var(--warning);
+      }
+
+      .progress.bad span {
+        background: var(--danger);
+      }
+
+      .split-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .list-row {
+        min-height: 54px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 10px;
+        display: grid;
+        gap: 4px;
+        background: var(--bg2);
+      }
+
+      .two-col {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 12px;
+      }
+
+      .form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .photo-box,
+      .scanner-box {
+        min-height: 154px;
+        border: 1px dashed var(--line);
+        border-radius: 8px;
+        background: var(--bg2);
+        display: grid;
+        place-items: center;
+        text-align: center;
+        color: var(--text2);
+        padding: 16px;
+      }
+
+      .kanban {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(220px, 1fr));
+        gap: 12px;
+      }
+
+      .vehicle {
+        display: grid;
+        gap: 12px;
+      }
+
+      .vehicle .list-row {
+        background: var(--bg);
+      }
+
+      .totals {
+        display: grid;
+        gap: 8px;
+      }
+
+      .total-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 8px;
+      }
+
+      .total-row.strong {
+        font-weight: 700;
+        font-size: 16px;
+        border-bottom: 0;
+      }
+
+      .mobile-strip {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .phone {
+        min-height: 360px;
+        border: 10px solid var(--text);
+        border-radius: 24px;
+        background: var(--bg);
+        overflow: hidden;
+        display: grid;
+        grid-template-rows: 42px 1fr 58px;
+      }
+
+      .phone-top,
+      .phone-bottom {
+        background: var(--sidebar);
+        color: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+      }
+
+      .phone-body {
+        padding: 12px;
+        display: grid;
+        gap: 10px;
+        align-content: start;
+      }
+
+      @media (max-width: 1040px) {
+        .app {
+          grid-template-columns: 1fr;
+        }
+
+        .sidebar {
+          position: sticky;
+          top: 0;
+          z-index: 2;
+          padding: 12px;
+          gap: 12px;
+        }
+
+        .brand {
+          justify-content: space-between;
+        }
+
+        .nav {
+          grid-template-columns: repeat(5, minmax(110px, 1fr));
+          overflow: auto;
+        }
+
+        .sidebar-footer {
+          display: none;
+        }
+
+        .grid-4,
+        .grid-3,
+        .grid-main,
+        .two-col,
+        .mobile-strip {
+          grid-template-columns: 1fr;
+        }
+
+        .toolbar,
+        .form-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .kanban {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 620px) {
+        body {
+          font-size: 12px;
+        }
+
+        .topbar {
+          align-items: flex-start;
+          flex-direction: column;
+          padding: 16px;
+        }
+
+        .content {
+          padding: 16px;
+        }
+
+        .title-block h1 {
+          font-size: 21px;
+        }
+
+        .actions {
+          width: 100%;
+          justify-content: stretch;
+        }
+
+        .actions .btn {
+          flex: 1;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app" data-theme="light">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">tg</div>
+          <div>
+            <div class="brand-title">tiramigear</div>
+            <div class="brand-subtitle">Equipment Management</div>
+          </div>
+        </div>
+
+        <nav class="nav" aria-label="Hauptnavigation">
+          <button type="button" data-target="dashboard" aria-selected="true"><span class="dot"></span>Dashboard</button>
+          <button type="button" data-target="inventory" aria-selected="false"><span class="dot"></span>Inventar</button>
+          <button type="button" data-target="packages" aria-selected="false"><span class="dot"></span>Packages</button>
+          <button type="button" data-target="orders" aria-selected="false"><span class="dot"></span>Aufträge</button>
+          <button type="button" data-target="logistics" aria-selected="false"><span class="dot"></span>Logistik</button>
+          <button type="button" data-target="admin" aria-selected="false"><span class="dot"></span>Admin</button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <strong>Tirami GmbH</strong>
+          <p class="muted">Org: tirami<br />Rolle: Admin<br />Wireframe v0.1</p>
+        </div>
+      </aside>
+
+      <section class="workspace">
+        <header class="topbar">
+          <div class="title-block">
+            <h1 id="page-title">Dashboard</h1>
+            <p id="page-subtitle">Operativer Tagesblick für Dispo, Technik, Logistik und Rücknahme.</p>
+          </div>
+          <div class="actions">
+            <button class="btn" type="button" id="theme-toggle">Dark Mode</button>
+            <button class="btn" type="button">Export</button>
+            <button class="btn primary" type="button" id="primary-action">Neuer Auftrag</button>
+          </div>
+        </header>
+
+        <div class="content">
+          <section class="view active" id="dashboard">
+            <div class="grid-4">
+              <article class="metric"><span>Heute disponieren</span><strong>7</strong><span>Aufträge in Planung oder Packung</span></article>
+              <article class="metric"><span>Konflikte</span><strong>3</strong><span class="status warn">Warnung, nicht blockiert</span></article>
+              <article class="metric"><span>Rücknahmen offen</span><strong>5</strong><span class="status warn">Zustand prüfen</span></article>
+              <article class="metric"><span>Schäden / Vermisst</span><strong>14</strong><span class="status bad">Technik prüft</span></article>
+            </div>
+
+            <div class="grid-main">
+              <section class="panel">
+                <div class="panel-header">
+                  <h2>Dispo Tagesliste</h2>
+                  <button class="btn" type="button">Alle anzeigen</button>
+                </div>
+                <div class="table-shell">
+                  <table>
+                    <thead>
+                      <tr><th>Datum</th><th>Auftrag</th><th>Status</th><th>Material</th><th>Aktion</th></tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>24.05.2026</td><td>Corporate Event Basel</td><td><span class="status good">Bestätigt</span></td><td><span class="status good">bereit</span></td><td>Packliste prüfen</td></tr>
+                      <tr><td>28.05.2026</td><td>Festival Setup</td><td><span class="status warn">Geplant</span></td><td><span class="status warn">2 Konflikte</span></td><td>Zumietung klären</td></tr>
+                      <tr><td>03.06.2026</td><td>Townhall Stream</td><td><span class="status warn">Anfrage / Kalkulation</span></td><td><span class="status warn">Unterdeckung</span></td><td>Alternative wählen</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <aside class="panel">
+                <h2>Material-Warnungen</h2>
+                <div class="list-row">
+                  <strong>4x Robe Spiider doppelt disponiert</strong>
+                  <span class="muted">Festival Setup überschneidet mit Gala Luzern</span>
+                  <button class="btn" type="button">Extern anmieten</button>
+                </div>
+                <div class="list-row">
+                  <strong>Powercon 10m: 14 Stk. fehlen</strong>
+                  <span class="muted">Massenware reserviert: 86 / Bestand: 72</span>
+                  <button class="btn" type="button">Zumietung erfassen</button>
+                </div>
+                <div class="list-row">
+                  <strong>Case Licht 4 ist über 90%</strong>
+                  <span class="status warn">Gewicht prüfen</span>
+                </div>
+                <div class="list-row">
+                  <strong>Zumietung offen</strong>
+                  <span>4x Moving Light · Status: Angefragt</span>
+                </div>
+              </aside>
+            </div>
+
+            <div class="grid-3">
+              <section class="panel">
+                <h2>Packstatus</h2>
+                <div class="list-row"><strong>Corporate Event Basel</strong><span>36 / 44 Positionen geladen</span><div class="progress warn"><span style="width: 82%"></span></div></div>
+                <div class="list-row"><strong>Festival Setup</strong><span>12 / 98 Positionen vorbereitet</span><div class="progress"><span style="width: 12%"></span></div></div>
+              </section>
+              <section class="panel">
+                <h2>Rücknahme</h2>
+                <div class="list-row"><strong>Roadshow Bern</strong><span>5 Geräte noch nicht kontrolliert</span></div>
+                <div class="list-row"><strong>Case Audio B</strong><span class="status bad">1 Schaden gemeldet</span></div>
+                <div class="list-row"><strong>Powercon 10m</strong><span class="status bad">2 Stk. vermisst</span></div>
+              </section>
+              <section class="panel">
+                <h2>Amortisation Kurzblick</h2>
+                <div class="list-row"><strong>Netto-Basis</strong><span>Equipment-Miete ohne MwSt., ohne Transport/Personal</span></div>
+                <div class="list-row"><strong>97 Geräte amortisiert</strong><span>sichtbar für alle Rollen</span></div>
+              </section>
+            </div>
+
+            <section class="panel">
+              <div class="panel-header">
+                <h2>Mobile Arbeitsablaeufe</h2>
+                <span class="muted">Scanner, Packliste, Rücknahme und Schadensmeldung</span>
+              </div>
+              <div class="mobile-strip">
+                <div class="phone">
+                  <div class="phone-top">Scan</div>
+                  <div class="phone-body">
+                    <div class="scanner-box">Kamera-Scanner<br />Barcode / QR</div>
+                    <button class="btn primary" type="button">Gerät suchen</button>
+                  </div>
+                  <div class="phone-bottom">Inventar</div>
+                </div>
+                <div class="phone">
+                  <div class="phone-top">Packliste</div>
+                  <div class="phone-body">
+                    <div class="list-row"><strong>Case Audio A</strong><span>12 Einzelgeräte · 310 kg</span></div>
+                    <div class="list-row"><strong>Kabelcase 1</strong><span>20x Powercon · 10x XLR · 126 kg</span></div>
+                    <div class="list-row"><strong>Y10P Links</strong><span class="status good">geladen</span></div>
+                    <div class="list-row"><strong>Powercon Set</strong><span class="status warn">offen</span></div>
+                  </div>
+                  <div class="phone-bottom">Logistik</div>
+                </div>
+                <div class="phone">
+                  <div class="phone-top">Rücknahme</div>
+                  <div class="phone-body">
+                    <div class="list-row"><strong>Einzelgerät</strong><span>Scan + Zustand pro Gerät</span></div>
+                    <div class="list-row"><strong>Massenware</strong><span>Ausg. 40 · Zurück 38 · Defekt 1 · Vermisst 2</span></div>
+                    <div class="photo-box">Foto bei Schaden</div>
+                    <select class="field"><option>Gut</option><option>Leichte Mängel</option><option>Defekt</option><option>In Reparatur</option><option>Vermisst</option></select>
+                    <input class="field" value="" placeholder="Notiz für Technik" />
+                    <button class="btn primary" type="button">Speichern</button>
+                  </div>
+                  <div class="phone-bottom">Kontrolle</div>
+                </div>
+              </div>
+            </section>
+          </section>
+
+          <section class="view" id="inventory">
+            <section class="panel">
+              <div class="panel-header">
+                <h2>Inventar</h2>
+                <button class="btn primary" type="button">Artikel erfassen</button>
+              </div>
+              <div class="toolbar">
+                <input class="field" value="" placeholder="Suche nach Name, Seriennummer, Barcode oder Massenartikel" />
+                <select class="field"><option>Alle Kategorien</option><option>Audio</option><option>Lichttechnik</option><option>Videotechnik</option></select>
+                <select class="field"><option>Alle Zustände</option><option>Gut</option><option>Leichte Mängel</option><option>Defekt</option><option>In Reparatur</option><option>Vermisst</option></select>
+                <button class="btn" type="button">Scan</button>
+              </div>
+              <div class="grid-main">
+                <div class="table-shell">
+                  <table>
+                    <thead>
+                      <tr><th>Artikel</th><th>Typ</th><th>Kategorie</th><th>Bestand/Case</th><th>Zustand</th><th>Amortisation</th></tr>
+                    </thead>
+                    <tbody>
+                      <tr><td>d&amp;b Y10P L</td><td>Einzelgerät</td><td>Audio</td><td>Case Audio A</td><td><span class="status good">Gut</span></td><td>112%</td></tr>
+                      <tr><td>Robe Spiider</td><td>Einzelgerät</td><td>Lichttechnik</td><td>Case Licht 4</td><td><span class="status warn">Mängel</span></td><td>61%</td></tr>
+                      <tr><td>Powercon 10m</td><td>Massenware</td><td>Kabel</td><td>72 Stk. / 86 reserviert</td><td><span class="status warn">Unterdeckung</span></td><td>-</td></tr>
+                      <tr><td>Truss 2m F34</td><td>Einzelgerät</td><td>Truss</td><td>-</td><td><span class="status bad">Vermisst</span></td><td>EK fehlt</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <aside class="panel">
+                  <h2>Gerätedetail</h2>
+                  <div class="photo-box">Hauptfoto</div>
+                  <div class="form-grid">
+                    <input class="field" value="d&b Y10P L" />
+                    <input class="field" value="TG-000184" />
+                    <input class="field" value="28.5 kg" />
+                    <input class="field" value="CHF 180 / Tag" />
+                    <input class="field" value="CHF 4'800 EK" />
+                    <select class="field"><option>Gut</option></select>
+                  </div>
+                  <div class="list-row">
+                    <strong>Verfügbarkeit</strong>
+                    <span class="muted">Warnungen erlauben Speichern und führen zur Zumietung.</span>
+                  </div>
+                  <div class="list-row">
+                    <strong>Letzte Rücknahme</strong>
+                    <span class="muted">Leichte Mängel oder Vermisst · Foto und Notiz vorhanden</span>
+                  </div>
+                  <div class="list-row">
+                    <strong>Massenware-Rücknahme</strong>
+                    <span class="muted">Mengenbasiert: zurück, defekt, vermisst und Notiz.</span>
+                  </div>
+                  <div class="list-row">
+                    <strong>Case-Gewicht</strong>
+                    <span class="muted">Eigengewicht + Einzelgeräte + Massenware x Stückgewicht.</span>
+                  </div>
+                </aside>
+              </div>
+            </section>
+          </section>
+
+          <section class="view" id="packages">
+            <div class="grid-main">
+              <section class="panel">
+                <div class="panel-header">
+                  <h2>Setup-Vorlagen</h2>
+                  <button class="btn primary" type="button">Package erstellen</button>
+                </div>
+                <div class="toolbar">
+                  <input class="field" value="" placeholder="Suche nach Package, Setup, Kategorie" />
+                  <select class="field"><option>Alle Kategorien</option><option>Bühne</option><option>Corporate</option><option>Streaming</option></select>
+                  <select class="field"><option>Alle Warnungen</option><option>Keine Warnung</option><option>Daten fehlen</option></select>
+                  <button class="btn" type="button">Duplizieren</button>
+                </div>
+                <div class="grid-3">
+                  <article class="panel">
+                    <h3>Standard Bühne M</h3>
+                    <div class="list-row"><strong>Richtpreis</strong><span>CHF 6'840 / Tag</span></div>
+                    <div class="list-row"><strong>Gewicht</strong><span>1'180 kg · 4 Cases · 16 Loseposten</span></div>
+                    <button class="btn primary" type="button">Auftrag daraus erstellen</button>
+                  </article>
+                  <article class="panel">
+                    <h3>Corporate Audio M</h3>
+                    <div class="list-row"><strong>Richtpreis</strong><span>CHF 2'340 / Tag</span></div>
+                    <div class="list-row"><strong>Inhalt</strong><span>Audio Cases, Funk, Kabelcase</span></div>
+                    <button class="btn" type="button">Bearbeiten</button>
+                  </article>
+                  <article class="panel">
+                    <h3>Streaming Regie S</h3>
+                    <div class="list-row"><strong>Richtpreis</strong><span>CHF 1'780 / Tag</span></div>
+                    <div class="list-row"><strong>Warnung</strong><span class="status warn">2 Stückgewichte fehlen</span></div>
+                    <button class="btn" type="button">Bearbeiten</button>
+                  </article>
+                </div>
+              </section>
+
+              <aside class="panel">
+                <h2>Package-Detail</h2>
+                <div class="list-row">
+                  <strong>Standard Bühne M</strong>
+                  <span class="muted">Vorlage für wiederkehrende Bühnen-Setups</span>
+                </div>
+                <div class="list-row">
+                  <strong>Cases</strong>
+                  <span>Case Audio A, Case Licht 4, Kabelcase 1, Video Regie</span>
+                </div>
+                <div class="list-row">
+                  <strong>Einzelgeräte</strong>
+                  <span>4x d&amp;b Y10P, 8x Robe Spiider, ATEM Regie</span>
+                </div>
+                <div class="list-row">
+                  <strong>Massenware</strong>
+                  <span>40x Powercon 10m, 24x XLR 5m, 12x Adapter</span>
+                </div>
+                <div class="list-row">
+                  <strong>Extern bei Bedarf</strong>
+                  <span>4x Moving Light extern, 2x Followspot</span>
+                </div>
+                <div class="list-row">
+                  <strong>Snapshot-Regel</strong>
+                  <span>Änderungen wirken nur auf neue Aufträge.</span>
+                </div>
+              </aside>
+            </div>
+          </section>
+
+          <section class="view" id="orders">
+            <div class="grid-main">
+              <section class="panel">
+                <div class="panel-header">
+                  <h2>Auftrag erfassen</h2>
+                  <button class="btn" type="button">Aus Paket starten</button>
+                </div>
+                <div class="form-grid">
+                  <input class="field" value="Corporate Event Basel" />
+                  <input class="field" value="Novaris AG" />
+                  <select class="field">
+                    <option>Anfrage / Kalkulation</option>
+                    <option>Geplant</option>
+                    <option>Bestätigt</option>
+                    <option>In Packung</option>
+                    <option>Geladen</option>
+                    <option>Im Einsatz</option>
+                    <option>Retour</option>
+                    <option>In Kontrolle</option>
+                    <option>Abgeschlossen</option>
+                    <option>Storniert</option>
+                  </select>
+                  <input class="field" value="Event: 24.05.2026 18:00" />
+                  <input class="field" value="Event Ende: 26.05.2026 02:00" />
+                  <input class="field" value="Packdatum: 23.05.2026" />
+                  <input class="field" value="Ladedatum: 24.05.2026 09:00" />
+                  <input class="field" value="Retour: 26.05.2026 14:00" />
+                  <input class="field" value="Kontrollfrist: 27.05.2026" />
+                </div>
+                <div class="list-row">
+                  <strong>Verfügbarkeit prüft Ladedatum bis Retour</strong>
+                  <span class="muted">Konflikte warnen nur und können direkt als Zumietung geplant werden.</span>
+                </div>
+                <div class="two-col">
+                  <div class="panel">
+                    <h3>Equipment</h3>
+                    <div class="list-row"><strong>Package: Corporate Audio M</strong><span>18 Positionen · CHF 2'340 / Tag</span></div>
+                    <div class="list-row"><strong>Case Video Regie</strong><span>6 Einzelgeräte · 82 kg</span></div>
+                    <div class="list-row"><strong>Kabelcase 1</strong><span>126 kg · Eigengewicht + Stückgewichte</span></div>
+                    <div class="list-row"><strong>Powercon 10m</strong><span class="status warn">14 Stk. Unterdeckung</span></div>
+                    <button class="btn" type="button">Position hinzufügen</button>
+                  </div>
+                  <div class="panel">
+                    <h3>Externes Mietmaterial</h3>
+                    <div class="list-row"><strong>4x Robe Spiider</strong><span>Status: Bestätigt · Einkauf CHF 380 · Verkauf CHF 440</span></div>
+                    <div class="list-row"><strong>14x Powercon 10m</strong><span>Status: Bedarf offen · Unterdeckung Massenware</span></div>
+                    <div class="list-row"><strong>4x Moving Light</strong><span>Status: Angefragt · Lieferant offen</span></div>
+                    <button class="btn" type="button">Zumietung hinzufügen</button>
+                  </div>
+                </div>
+                <div class="panel">
+                  <h3>Zumietungsstatus</h3>
+                  <div class="grid-3">
+                    <div class="list-row"><strong>Bedarf offen</strong><span>14x Powercon</span></div>
+                    <div class="list-row"><strong>Angefragt</strong><span>4x Moving Light</span></div>
+                    <div class="list-row"><strong>Bestätigt</strong><span>4x Robe Spiider</span></div>
+                  </div>
+                </div>
+                <div class="panel">
+                  <h3>Zusatzkosten</h3>
+                  <div class="two-col">
+                    <div class="list-row"><strong>Transport</strong><span>CHF 650</span></div>
+                    <div class="list-row"><strong>Personal</strong><span>CHF 1'800</span></div>
+                  </div>
+                  <button class="btn" type="button">Kosten hinzufügen</button>
+                </div>
+                <div class="panel">
+                  <h3>Abschluss-Checkliste</h3>
+                  <div class="grid-3">
+                    <div class="list-row"><strong>Einzelgeräte</strong><span class="status good">alle retour / markiert</span></div>
+                    <div class="list-row"><strong>Massenware</strong><span class="status warn">Powercon fehlt</span></div>
+                    <div class="list-row"><strong>Externes Material</strong><span class="status warn">Retoure offen</span></div>
+                    <div class="list-row"><strong>Schäden</strong><span class="status good">erfasst</span></div>
+                    <div class="list-row"><strong>Kalkulation</strong><span class="status good">final</span></div>
+                    <div class="list-row"><strong>Amortisation</strong><span class="status warn">wartet auf Abschluss</span></div>
+                  </div>
+                </div>
+                <div class="table-shell">
+                  <table>
+                    <thead><tr><th>Position</th><th>Typ</th><th>Menge</th><th>Tage</th><th>Rate</th><th>Total</th></tr></thead>
+                    <tbody>
+                      <tr><td>d&amp;b Y10P</td><td>Eigen</td><td>4</td><td>2</td><td>CHF 180</td><td>CHF 1'440</td></tr>
+                      <tr><td>Robe Spiider</td><td>Eigen</td><td>8</td><td>2</td><td>CHF 95</td><td>CHF 1'520</td></tr>
+                      <tr><td>Robe Spiider</td><td>Extern</td><td>4</td><td>2</td><td>CHF 110</td><td>CHF 880</td></tr>
+                      <tr><td>Video Regie</td><td>Eigen</td><td>1</td><td>2</td><td>CHF 780</td><td>CHF 1'560</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+              <aside class="panel">
+                <h2>Kalkulation</h2>
+                <div class="totals">
+                  <div class="total-row"><span>Equipment</span><strong>CHF 4'520</strong></div>
+                  <div class="total-row"><span>Externes Mietmaterial</span><strong>CHF 880</strong></div>
+                  <div class="total-row"><span>Zusatzkosten</span><strong>CHF 2'450</strong></div>
+                  <div class="total-row"><span>Rabatt 10%</span><strong>- CHF 785</strong></div>
+                  <div class="total-row"><span>Exkl. MwSt.</span><strong>CHF 7'065</strong></div>
+                  <div class="total-row"><span>MwSt. 8.1%</span><strong>CHF 572.25</strong></div>
+                  <div class="total-row strong"><span>Total</span><strong>CHF 7'637.25</strong></div>
+                </div>
+                <div class="list-row">
+                  <strong>Amortisationsbasis netto</strong>
+                  <span>Nur eigenes Equipment nach Rabatt, ohne MwSt. und ohne Zumietung.</span>
+                </div>
+                <button class="btn primary" type="button">Excel für Bexio</button>
+                <button class="btn" type="button">PDF intern</button>
+                <button class="btn" type="button">Auftrag kopieren</button>
+                <button class="btn" type="button">Abschließen gesperrt</button>
+              </aside>
+            </div>
+          </section>
+
+          <section class="view" id="logistics">
+            <section class="panel">
+              <div class="panel-header">
+                <div>
+                  <h2>Logistikplanung</h2>
+                  <p class="muted">Corporate Event Basel · Gesamtgewicht 1'280 kg</p>
+                </div>
+                <button class="btn primary" type="button">Packliste exportieren</button>
+              </div>
+              <div class="kanban">
+                <article class="panel vehicle">
+                  <h3>Sprinter Kevin · 920 kg Nutzlast</h3>
+                  <div class="progress warn"><span style="width: 78%"></span></div>
+                  <div class="list-row"><strong>Case Audio A</strong><span>310 kg · Eigengewicht + 12 Einzelgeräte</span></div>
+                  <div class="list-row"><strong>Case Licht 4</strong><span>280 kg · 8 Geräte</span></div>
+                  <div class="list-row"><strong>Kabelcase 1</strong><span>126 kg · Massenware x Stückgewicht</span></div>
+                </article>
+                <article class="panel vehicle">
+                  <h3>Anhänger 1 · 650 kg Nutzlast</h3>
+                  <div class="progress good"><span style="width: 42%"></span></div>
+                  <div class="list-row"><strong>Truss Bundle</strong><span>210 kg · Loseposten</span></div>
+                  <div class="list-row"><strong>Stative</strong><span>64 kg · Loseposten</span></div>
+                </article>
+                <article class="panel vehicle">
+                  <h3>Nicht zugewiesen</h3>
+                  <div class="progress bad"><span style="width: 100%"></span></div>
+                  <div class="list-row"><strong>LED Wall Controller</strong><span>12 kg · offen</span></div>
+                  <div class="list-row"><strong>Backup Audio Rack</strong><span>48 kg · offen</span></div>
+                  <div class="list-row"><strong>Extern: 4x Robe Spiider</strong><span>Status: Abholung geplant · Vermieter offen</span></div>
+                  <button class="btn" type="button">Fahrzeug hinzufügen</button>
+                </article>
+              </div>
+            </section>
+          </section>
+
+          <section class="view" id="admin">
+            <div class="grid-3">
+              <section class="panel">
+                <h2>Accounts</h2>
+                <div class="list-row"><strong>Kevin</strong><span>Admin · Preise und Amortisation sichtbar</span></div>
+                <div class="list-row"><strong>Dispo Team</strong><span>User · Aufträge und Kalkulation</span></div>
+                <div class="list-row"><strong>Logistik Team</strong><span>Logistik · Packen und Rücknahme</span></div>
+                <div class="list-row"><strong>Technik Team</strong><span>Technik · Schaden und Reparatur</span></div>
+                <button class="btn primary" type="button">Account erstellen</button>
+              </section>
+              <section class="panel">
+                <h2>Organisation</h2>
+                <div class="form-grid">
+                  <input class="field" value="Tirami GmbH" />
+                  <input class="field" value="tirami" />
+                  <select class="field"><option>Supabase EU</option></select>
+                  <select class="field"><option>Deutsch</option></select>
+                </div>
+              </section>
+              <section class="panel">
+                <h2>Systemstatus</h2>
+                <div class="list-row"><strong>RLS</strong><span class="status good">aktiv</span></div>
+                <div class="list-row"><strong>Storage</strong><span class="status good">Fotos bereit</span></div>
+                <div class="list-row"><strong>Backups</strong><span class="status warn">Regel definieren</span></div>
+              </section>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const titles = {
+        dashboard: ["Dashboard", "Operativer Tagesblick für Dispo, Technik, Logistik und Rücknahme.", "Neuer Auftrag"],
+        inventory: ["Inventar", "Einzelgeräte, Massenware, Zustand, Verfügbarkeit und Rücknahme.", "Artikel erfassen"],
+        packages: ["Packages", "Setup-Vorlagen für Standard-Bühnen, Corporate Audio und Regie.", "Package erstellen"],
+        orders: ["Aufträge", "Disposition, Konfliktwarnungen, Zumietung und Kalkulation in einem Ablauf.", "Auftrag speichern"],
+        logistics: ["Logistik", "Cases, Loseposten und externes Mietmaterial auf Fahrzeuge verteilen.", "Packliste exportieren"],
+        admin: ["Admin", "Accounts, Rollen, Organisation und technische Systemregeln.", "Account erstellen"]
+      };
+
+      const app = document.querySelector(".app");
+      const title = document.getElementById("page-title");
+      const subtitle = document.getElementById("page-subtitle");
+      const primaryAction = document.getElementById("primary-action");
+
+      document.querySelectorAll(".nav button").forEach((button) => {
+        button.addEventListener("click", () => {
+          const target = button.dataset.target;
+          document.querySelectorAll(".nav button").forEach((item) => item.setAttribute("aria-selected", "false"));
+          button.setAttribute("aria-selected", "true");
+          document.querySelectorAll(".view").forEach((view) => view.classList.remove("active"));
+          document.getElementById(target).classList.add("active");
+          title.textContent = titles[target][0];
+          subtitle.textContent = titles[target][1];
+          primaryAction.textContent = titles[target][2];
+        });
+      });
+
+      document.getElementById("theme-toggle").addEventListener("click", (event) => {
+        const isDark = app.dataset.theme === "dark";
+        app.dataset.theme = isDark ? "light" : "dark";
+        event.currentTarget.textContent = isDark ? "Dark Mode" : "Light Mode";
+      });
+    </script>
+  </body>
+</html>
