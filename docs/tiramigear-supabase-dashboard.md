@@ -14,10 +14,10 @@ Stand: 2026-05-16
 
 Im Projekt:
 
-1. `Project Settings`
-2. `API`
+1. `Connect` Dialog oder `Project Settings`
+2. `API Keys` bzw. `API`
 3. `Project URL` kopieren
-4. `anon public` key kopieren
+4. `anon public` oder `publishable` key kopieren
 
 Diese Werte kommen lokal in `.env.local`:
 
@@ -26,7 +26,8 @@ NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 ```
 
-Der `service_role` key bleibt geheim und wird nicht in den Browser-Code gepackt.
+Der `service_role` key bleibt geheim und wird nicht in den Browser-Code gepackt. Falls Supabase im Projekt bereits neue
+Publishable Keys anbietet, verwenden wir fuer den Browser den Publishable Key anstelle des alten `anon` Keys.
 
 ## 3. Migration ausführen
 
