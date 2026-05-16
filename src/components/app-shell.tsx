@@ -1,6 +1,7 @@
 "use client";
 
 import clsx from "clsx";
+import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import {
   AlertTriangle,
   ArrowRight,
@@ -11,6 +12,9 @@ import {
   Download,
   FileText,
   LayoutDashboard,
+  Loader2,
+  LogIn,
+  LogOut,
   Moon,
   Package as PackageIcon,
   Plus,
@@ -24,9 +28,9 @@ import {
   Wrench
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { dashboardMetrics, packageTemplates, projectRows, rentalStatuses } from "@/data/demo";
-import { isSupabaseConfigured } from "@/lib/supabase";
+import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
 import type { NavKey, ProjectStatus, StatusTone } from "@/types/domain";
 import { Button, Field, ListRow, Panel, Select, StatusBadge } from "@/components/ui";
 
@@ -34,6 +38,14 @@ type NavItem = {
   key: NavKey;
   label: string;
   icon: LucideIcon;
+};
+
+type Profile = {
+  id: string;
+  org_id: string;
+  email: string;
+  name: string;
+  role: "admin" | "user" | "logistics" | "technician";
 };
 
 const navItems: NavItem[] = [
@@ -44,6 +56,13 @@ const navItems: NavItem[] = [
   { key: "logistics", label: "Logistik", icon: Truck },
   { key: "admin", label: "Admin", icon: Shield }
 ];
+
+const roleLabels: Record<Profile["role"], string> = {
+  admin: "Admin",
+  user: "User",
+  logistics: "Logistik",
+  technician: "Technik"
+};
 
 const statusFlow: ProjectStatus[] = [
   "Anfrage / Kalkulation",
@@ -649,7 +668,7 @@ function LogisticsView() {
   );
 }
 
-function AdminView() {
+function AdminView({ profile }: { profile: Profile | null }) {
   const supabaseReady = isSupabaseConfigured();
 
   return (
@@ -660,6 +679,20 @@ function AdminView() {
         detail="Rollen, Organisation, Supabase-Status und spätere Integrationen werden hier zentral verwaltet."
       />
       <div className="grid gap-4 lg:grid-cols-3">
+        <Panel>
+          <SectionTitle icon={UserRound} title="Aktueller Benutzer" />
+          {profile ? (
+            <div className="grid gap-2">
+              <ListRow>
+                <strong>{profile.name}</strong>
+                <p className="text-sm text-[var(--text2)]">{profile.email}</p>
+              </ListRow>
+              <StatusBadge tone="good">{roleLabels[profile.role]}</StatusBadge>
+            </div>
+          ) : (
+            <p className="text-sm text-[var(--text2)]">Noch kein Profil geladen.</p>
+          )}
+        </Panel>
         <Panel>
           <SectionTitle icon={UserRound} title="Rollen" />
           <div className="grid gap-2">
@@ -699,7 +732,7 @@ function AdminView() {
   );
 }
 
-function renderView(active: NavKey) {
+function renderView(active: NavKey, profile: Profile | null) {
   switch (active) {
     case "inventory":
       return <InventoryView />;
@@ -710,16 +743,150 @@ function renderView(active: NavKey) {
     case "logistics":
       return <LogisticsView />;
     case "admin":
-      return <AdminView />;
+      return <AdminView profile={profile} />;
     default:
       return <DashboardView />;
   }
 }
 
+function AuthStateScreen({
+  dark,
+  message,
+  variant
+}: {
+  dark: boolean;
+  message?: string;
+  variant: "loading" | "locked";
+}) {
+  return (
+    <main data-theme={dark ? "dark" : "light"} className="min-h-screen bg-[var(--bg2)] px-4 py-8 text-[var(--text)]">
+      <div className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-xl place-items-center">
+        <Panel className="w-full">
+          <div className="flex items-start gap-3">
+            {variant === "loading" ? (
+              <Loader2 className="mt-0.5 h-5 w-5 animate-spin text-[var(--cyan)]" aria-hidden />
+            ) : (
+              <Shield className="mt-0.5 h-5 w-5 text-[var(--cyan)]" aria-hidden />
+            )}
+            <div>
+              <h1 className="font-heading text-xl font-bold">
+                {variant === "loading" ? "Session wird geprüft" : "Anmeldung erforderlich"}
+              </h1>
+              <p className="mt-1 text-sm leading-6 text-[var(--text2)]">
+                {message ??
+                  (variant === "loading"
+                    ? "tiramigear lädt Benutzer und Rolle."
+                    : "Bitte melde dich mit deinem tiramigear Account an.")}
+              </p>
+            </div>
+          </div>
+          {variant === "locked" ? (
+            <a
+              className="mt-4 inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-[var(--cyan)] bg-[var(--cyan)] px-3 font-medium text-[#001a2a]"
+              href="/login"
+            >
+              <LogIn className="h-4 w-4" aria-hidden />
+              Zum Login
+            </a>
+          ) : null}
+        </Panel>
+      </div>
+    </main>
+  );
+}
+
 export function AppShell() {
   const [active, setActive] = useState<NavKey>("dashboard");
   const [dark, setDark] = useState(false);
+  const [authReady, setAuthReady] = useState(!isSupabaseConfigured());
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [authMessage, setAuthMessage] = useState<string>();
   const activeItem = useMemo(() => navItems.find((item) => item.key === active) ?? navItems[0], [active]);
+  const supabase = useMemo(() => getSupabaseBrowserClient(), []);
+  const supabaseReady = isSupabaseConfigured();
+
+  useEffect(() => {
+    if (!supabase) {
+      setAuthReady(true);
+      return;
+    }
+
+    let mounted = true;
+
+    async function loadProfile(userId: string | null) {
+      if (!mounted) {
+        return;
+      }
+
+      setAuthReady(false);
+
+      if (!userId) {
+        setProfile(null);
+        setAuthMessage(undefined);
+        setAuthReady(true);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, org_id, email, name, role")
+        .eq("id", userId)
+        .single();
+
+      if (!mounted) {
+        return;
+      }
+
+      if (error) {
+        setProfile(null);
+        setAuthMessage("Dein Login ist gültig, aber das Benutzerprofil wurde noch nicht gefunden.");
+      } else {
+        setProfile(data as Profile);
+        setAuthMessage(undefined);
+      }
+
+      setAuthReady(true);
+    }
+
+    async function loadSession() {
+      const { data, error } = await supabase.auth.getSession();
+
+      if (error) {
+        setAuthMessage(error.message);
+        setAuthReady(true);
+        return;
+      }
+
+      await loadProfile(data.session?.user.id ?? null);
+    }
+
+    void loadSession();
+
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
+      void loadProfile(session?.user.id ?? null);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
+
+  async function handleLogout() {
+    await supabase?.auth.signOut();
+    setProfile(null);
+    window.location.href = "/login";
+  }
+
+  if (supabaseReady && !authReady) {
+    return <AuthStateScreen dark={dark} variant="loading" />;
+  }
+
+  if (supabaseReady && !profile) {
+    return <AuthStateScreen dark={dark} message={authMessage} variant="locked" />;
+  }
 
   return (
     <div data-theme={dark ? "dark" : "light"} className="min-h-screen bg-[var(--bg2)] text-[var(--text)]">
@@ -785,17 +952,31 @@ export function AppShell() {
                 <Plus className="h-4 w-4" aria-hidden />
                 Neuer Auftrag
               </Button>
-              <a
-                className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-[var(--line)] bg-[var(--bg)] px-3 font-medium text-[var(--text)] transition hover:border-[var(--cyan)]"
-                href="/login"
-              >
-                <UserRound className="h-4 w-4" aria-hidden />
-                Login
-              </a>
+              {profile ? (
+                <>
+                  <div className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-[var(--line)] bg-[var(--bg2)] px-3">
+                    <UserRound className="h-4 w-4 text-[var(--text2)]" aria-hidden />
+                    <span className="text-sm font-bold">{profile.email}</span>
+                    <StatusBadge tone="good">{roleLabels[profile.role]}</StatusBadge>
+                  </div>
+                  <Button className="inline-flex items-center gap-2" onClick={handleLogout}>
+                    <LogOut className="h-4 w-4" aria-hidden />
+                    Logout
+                  </Button>
+                </>
+              ) : (
+                <a
+                  className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-[var(--line)] bg-[var(--bg)] px-3 font-medium text-[var(--text)] transition hover:border-[var(--cyan)]"
+                  href="/login"
+                >
+                  <UserRound className="h-4 w-4" aria-hidden />
+                  Login
+                </a>
+              )}
             </div>
           </div>
         </header>
-        <main className="mx-auto max-w-[1440px] px-4 py-5 lg:px-6">{renderView(active)}</main>
+        <main className="mx-auto max-w-[1440px] px-4 py-5 lg:px-6">{renderView(active, profile)}</main>
       </div>
     </div>
   );

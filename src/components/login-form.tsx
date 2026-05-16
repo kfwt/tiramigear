@@ -1,6 +1,7 @@
 "use client";
 
 import { CheckCircle2, LogIn, ShieldAlert } from "lucide-react";
+import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useState } from "react";
 import { Button, Field, Panel, StatusBadge } from "@/components/ui";
@@ -9,6 +10,7 @@ import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
 type LoginMode = "signin" | "signup";
 
 export function LoginForm() {
+  const router = useRouter();
   const [mode, setMode] = useState<LoginMode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -41,10 +43,14 @@ export function LoginForm() {
       return;
     }
 
+    if (mode === "signin" || response.data.session) {
+      router.push("/");
+      router.refresh();
+      return;
+    }
+
     setMessage(
-      mode === "signin"
-        ? "Login erfolgreich. Die App kann nun rollenbasiert angebunden werden."
-        : "Account angelegt. Je nach Supabase-Einstellung musst du die E-Mail noch bestätigen."
+      "Account angelegt. Je nach Supabase-Einstellung musst du die E-Mail noch bestätigen. Danach kannst du dich einloggen."
     );
   }
 
