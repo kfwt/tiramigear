@@ -5,6 +5,7 @@ Internes Equipment-Management fuer Dispo, Technik und Logistik.
 ## Aktueller Stand
 
 - Next.js App-Skelett mit klickbarer Arbeitsoberflaeche
+- Login-Seite unter `/login` fuer Supabase Auth vorbereitet
 - Demo-Views fuer Dashboard, Inventar, Packages, Auftraege, Logistik und Admin
 - Supabase-Migration fuer das MVP-Datenmodell
 - Dokumentierte Produktentscheide, Rollen, Prozess und Crew-Abgrenzung
@@ -52,6 +53,7 @@ Details stehen in `docs/tiramigear-supabase-setup.md`.
 - `docs/tiramigear-rollenmatrix.md`
 - `docs/tiramigear-crew-modul.md`
 - `docs/tiramigear-supabase-setup.md`
+- `docs/tiramigear-supabase-dashboard.md`
 
 ## Naechste Entwicklungsschritte
 

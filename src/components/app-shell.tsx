@@ -785,6 +785,13 @@ export function AppShell() {
                 <Plus className="h-4 w-4" aria-hidden />
                 Neuer Auftrag
               </Button>
+              <a
+                className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-[var(--line)] bg-[var(--bg)] px-3 font-medium text-[var(--text)] transition hover:border-[var(--cyan)]"
+                href="/login"
+              >
+                <UserRound className="h-4 w-4" aria-hidden />
+                Login
+              </a>
             </div>
           </div>
         </header>
