@@ -10,6 +10,7 @@ drop table if exists public.logistics_load_items cascade;
 drop table if exists public.project_vehicle_assignments cascade;
 drop table if exists public.vehicles cascade;
 drop table if exists public.external_rental_items cascade;
+drop table if exists public.external_catalog_items cascade;
 drop table if exists public.project_bulk_assignments cascade;
 drop table if exists public.project_item_assignments cascade;
 drop table if exists public.project_positions cascade;

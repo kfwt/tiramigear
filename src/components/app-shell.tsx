@@ -19,7 +19,6 @@ import {
   Package as PackageIcon,
   Plus,
   ScanLine,
-  Search,
   Settings,
   Shield,
   Sun,
@@ -29,23 +28,16 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { InventoryView } from "@/components/inventory-view";
+import { Button, Field, ListRow, Panel, Select, StatusBadge } from "@/components/ui";
 import { dashboardMetrics, packageTemplates, projectRows, rentalStatuses } from "@/data/demo";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
-import type { NavKey, ProjectStatus, StatusTone } from "@/types/domain";
-import { Button, Field, ListRow, Panel, Select, StatusBadge } from "@/components/ui";
+import type { NavKey, ProjectStatus, StatusTone, UserProfile } from "@/types/domain";
 
 type NavItem = {
   key: NavKey;
   label: string;
   icon: LucideIcon;
-};
-
-type Profile = {
-  id: string;
-  org_id: string;
-  email: string;
-  name: string;
-  role: "admin" | "user" | "logistics" | "technician";
 };
 
 const navItems: NavItem[] = [
@@ -57,7 +49,7 @@ const navItems: NavItem[] = [
   { key: "admin", label: "Admin", icon: Shield }
 ];
 
-const roleLabels: Record<Profile["role"], string> = {
+const roleLabels: Record<UserProfile["role"], string> = {
   admin: "Admin",
   user: "User",
   logistics: "Logistik",
@@ -74,45 +66,6 @@ const statusFlow: ProjectStatus[] = [
   "Retour",
   "In Kontrolle",
   "Abgeschlossen"
-];
-
-const inventoryRows = [
-  {
-    code: "TG-LGT-001",
-    name: "Robe Spiider #01",
-    type: "Einzelgerät",
-    status: "Verfügbar",
-    owner: "Eigenmaterial",
-    quantity: "1",
-    amortization: "72%"
-  },
-  {
-    code: "TG-LGT-014",
-    name: "Robe Spiider #14",
-    type: "Einzelgerät",
-    status: "Doppelt disponiert",
-    owner: "Eigenmaterial",
-    quantity: "1",
-    amortization: "41%"
-  },
-  {
-    code: "TG-CBL-PC10",
-    name: "Powercon 10m",
-    type: "Massenware",
-    status: "Unterdeckung",
-    owner: "Eigenmaterial",
-    quantity: "186 Stk.",
-    amortization: "Netto"
-  },
-  {
-    code: "EXT-LGT-001",
-    name: "Moving Light extern",
-    type: "Zumietung",
-    status: "Angefragt",
-    owner: "Extern",
-    quantity: "4 Stk.",
-    amortization: "keine"
-  }
 ];
 
 const warningRows = [
@@ -320,118 +273,6 @@ function DashboardView() {
           <SectionTitle icon={FileText} title="Netto-Amortisation" />
           <p className="text-sm text-[var(--text2)]">Berechnet nach abgeschlossenem Auftrag, ohne MwSt., Transport, Personal und Zumietung.</p>
           <strong className="mt-4 block font-heading text-2xl">{"CHF 18'420"}</strong>
-        </Panel>
-      </div>
-    </>
-  );
-}
-
-function InventoryView() {
-  return (
-    <>
-      <ViewHeader
-        eyebrow="Material"
-        title="Inventar & Stückgut"
-        detail="Einzelgeräte werden einzeln geführt. Massenware wie Kabel, Adapter und Kabelbrücken arbeitet mit Stückzahlen."
-      />
-      <Panel>
-        <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_180px_180px_auto]">
-          <label>
-            <span className="mb-1 block text-xs font-bold uppercase text-[var(--text2)]">Suche</span>
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text2)]" />
-              <Field className="pl-9" placeholder="Gerät, Seriennummer, Case" />
-            </div>
-          </label>
-          <label>
-            <span className="mb-1 block text-xs font-bold uppercase text-[var(--text2)]">Typ</span>
-            <Select defaultValue="Alle">
-              <option>Alle</option>
-              <option>Einzelgerät</option>
-              <option>Massenware</option>
-              <option>Case</option>
-              <option>Zumietung</option>
-            </Select>
-          </label>
-          <label>
-            <span className="mb-1 block text-xs font-bold uppercase text-[var(--text2)]">Status</span>
-            <Select defaultValue="Alle">
-              <option>Alle</option>
-              <option>Verfügbar</option>
-              <option>Reserviert</option>
-              <option>Defekt</option>
-              <option>Vermisst</option>
-            </Select>
-          </label>
-          <Button variant="primary" className="mt-auto inline-flex items-center justify-center gap-2">
-            <Plus className="h-4 w-4" aria-hidden />
-            Material
-          </Button>
-        </div>
-      </Panel>
-      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <Panel>
-          <SectionTitle icon={Boxes} title="Bestand" />
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] border-collapse text-left">
-              <thead>
-                <tr className="border-b border-[var(--line)] text-xs uppercase text-[var(--text2)]">
-                  <th className="px-3 py-3 font-bold">Code</th>
-                  <th className="px-3 py-3 font-bold">Material</th>
-                  <th className="px-3 py-3 font-bold">Typ</th>
-                  <th className="px-3 py-3 font-bold">Status</th>
-                  <th className="px-3 py-3 font-bold">Eigentum</th>
-                  <th className="px-3 py-3 font-bold">Menge</th>
-                  <th className="px-3 py-3 font-bold">Amort.</th>
-                </tr>
-              </thead>
-              <tbody>
-                {inventoryRows.map((row) => (
-                  <tr key={row.code} className="border-b border-[var(--line)] last:border-0">
-                    <td className="px-3 py-4 font-mono text-xs">{row.code}</td>
-                    <td className="px-3 py-4 font-bold">{row.name}</td>
-                    <td className="px-3 py-4">{row.type}</td>
-                    <td className="px-3 py-4">
-                      <StatusBadge tone={toneForStatus(row.status)}>{row.status}</StatusBadge>
-                    </td>
-                    <td className="px-3 py-4">{row.owner}</td>
-                    <td className="px-3 py-4">{row.quantity}</td>
-                    <td className="px-3 py-4">{row.amortization}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Panel>
-        <Panel>
-          <SectionTitle icon={ScanLine} title="Schnellerfassung" />
-          <div className="grid gap-3">
-            <label>
-              <span className="mb-1 block text-xs font-bold uppercase text-[var(--text2)]">Erfassungsart</span>
-              <Select defaultValue="Einzelgerät">
-                <option>Einzelgerät</option>
-                <option>Massenware</option>
-                <option>Case</option>
-                <option>Extern angemietet</option>
-              </Select>
-            </label>
-            <label>
-              <span className="mb-1 block text-xs font-bold uppercase text-[var(--text2)]">Name</span>
-              <Field placeholder="z.B. Robe Spiider #15" />
-            </label>
-            <label>
-              <span className="mb-1 block text-xs font-bold uppercase text-[var(--text2)]">EK netto</span>
-              <Field placeholder="CHF 0.00" />
-            </label>
-            <label>
-              <span className="mb-1 block text-xs font-bold uppercase text-[var(--text2)]">Gewicht</span>
-              <Field placeholder="kg" />
-            </label>
-            <Button variant="primary" className="inline-flex items-center justify-center gap-2">
-              <CheckCircle2 className="h-4 w-4" aria-hidden />
-              Speichern
-            </Button>
-          </div>
         </Panel>
       </div>
     </>
@@ -668,7 +509,7 @@ function LogisticsView() {
   );
 }
 
-function AdminView({ profile }: { profile: Profile | null }) {
+function AdminView({ profile }: { profile: UserProfile | null }) {
   const supabaseReady = isSupabaseConfigured();
 
   return (
@@ -732,10 +573,10 @@ function AdminView({ profile }: { profile: Profile | null }) {
   );
 }
 
-function renderView(active: NavKey, profile: Profile | null) {
+function renderView(active: NavKey, profile: UserProfile | null) {
   switch (active) {
     case "inventory":
-      return <InventoryView />;
+      return <InventoryView profile={profile} />;
     case "packages":
       return <PackagesView />;
     case "orders":
@@ -799,7 +640,7 @@ export function AppShell() {
   const [active, setActive] = useState<NavKey>("dashboard");
   const [dark, setDark] = useState(false);
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured());
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [authMessage, setAuthMessage] = useState<string>();
   const activeItem = useMemo(() => navItems.find((item) => item.key === active) ?? navItems[0], [active]);
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
@@ -841,7 +682,7 @@ export function AppShell() {
         setProfile(null);
         setAuthMessage("Dein Login ist gültig, aber das Benutzerprofil wurde noch nicht gefunden.");
       } else {
-        setProfile(data as Profile);
+        setProfile(data as UserProfile);
         setAuthMessage(undefined);
       }
 

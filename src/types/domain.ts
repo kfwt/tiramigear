@@ -1,5 +1,15 @@
 export type NavKey = "dashboard" | "inventory" | "packages" | "orders" | "logistics" | "admin";
 
+export type AppRole = "admin" | "user" | "logistics" | "technician";
+
+export type UserProfile = {
+  id: string;
+  org_id: string;
+  email: string;
+  name: string;
+  role: AppRole;
+};
+
 export type ProjectStatus =
   | "Anfrage / Kalkulation"
   | "Geplant"
