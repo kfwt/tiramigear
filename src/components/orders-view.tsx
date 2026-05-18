@@ -85,6 +85,14 @@ type ProjectPositionRow = {
   created_at: string;
 };
 
+type AvailabilityWarning = {
+  id: string;
+  title: string;
+  detail: string;
+  action: string;
+  tone: StatusTone;
+};
+
 type PositionForm = {
   materialKey: string;
   description: string;
@@ -130,6 +138,40 @@ type DbExternalOptionRow = {
 
 type DbProjectItemAssignmentRow = {
   item_id: string;
+};
+
+type DbAvailabilityProjectRow = {
+  id: string;
+  name: string;
+  load_at: string;
+  return_at: string;
+  status: ProjectStatusCode;
+};
+
+type DbAvailabilityItemAssignmentRow = {
+  item_id: string;
+  position_id: string | null;
+  project_id: string;
+};
+
+type DbAvailabilityBulkAssignmentRow = {
+  bulk_item_id: string;
+  planned_quantity: number;
+  position_id: string | null;
+  project_id: string;
+};
+
+type DbAvailabilityItemRow = {
+  id: string;
+  name: string;
+  barcode: string | null;
+  serial_number: string | null;
+};
+
+type DbAvailabilityBulkRow = {
+  id: string;
+  name: string;
+  total_quantity: number;
 };
 
 type OrdersViewProps = {
@@ -265,6 +307,10 @@ function itemCode(item: DbItemOptionRow) {
   return item.barcode || item.serial_number || `ITEM-${String(item.id).slice(0, 8)}`;
 }
 
+function availabilityItemCode(item: DbAvailabilityItemRow) {
+  return item.barcode || item.serial_number || `ITEM-${String(item.id).slice(0, 8)}`;
+}
+
 function itemConditionLabel(value?: string | null) {
   switch (value) {
     case "minor_issues":
@@ -330,6 +376,14 @@ function positionTotal(quantity: string, days: string, unitPrice: string) {
 
 function requiresWholeQuantity(sourceType: PositionSourceType) {
   return sourceType === "item" || sourceType === "bulk_item" || sourceType === "external";
+}
+
+function groupSum<T>(items: T[], keyFn: (item: T) => string, valueFn: (item: T) => number) {
+  return items.reduce<Record<string, number>>((groups, item) => {
+    const key = keyFn(item);
+    groups[key] = (groups[key] ?? 0) + valueFn(item);
+    return groups;
+  }, {});
 }
 
 function statusMeta(status: ProjectStatusCode) {
@@ -452,6 +506,9 @@ export function OrdersView({ profile }: OrdersViewProps) {
   const [savingPosition, setSavingPosition] = useState(false);
   const [message, setMessage] = useState<string>();
   const [positionMessage, setPositionMessage] = useState<string>();
+  const [availabilityWarnings, setAvailabilityWarnings] = useState<AvailabilityWarning[]>([]);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [availabilityMessage, setAvailabilityMessage] = useState<string>();
   const [externalCatalogReady, setExternalCatalogReady] = useState(false);
   const [lastLoadedAt, setLastLoadedAt] = useState<Date | null>(null);
 
@@ -614,6 +671,148 @@ export function OrdersView({ profile }: OrdersViewProps) {
     [profile, supabase]
   );
 
+  const loadAvailabilityWarnings = useCallback(
+    async (project: ProjectRow | null) => {
+      if (!project) {
+        setAvailabilityWarnings([]);
+        setAvailabilityMessage(undefined);
+        return;
+      }
+
+      if (!supabase || !profile) {
+        setAvailabilityWarnings([]);
+        return;
+      }
+
+      setAvailabilityLoading(true);
+      setAvailabilityMessage(undefined);
+
+      const [currentItemsResponse, currentBulkResponse, overlappingProjectsResponse] = await Promise.all([
+        supabase.from("project_item_assignments").select("item_id, position_id, project_id").eq("project_id", project.id),
+        supabase.from("project_bulk_assignments").select("bulk_item_id, planned_quantity, position_id, project_id").eq("project_id", project.id),
+        supabase
+          .from("projects")
+          .select("id, name, load_at, return_at, status")
+          .neq("id", project.id)
+          .lt("load_at", project.return_at)
+          .gt("return_at", project.load_at)
+      ]);
+
+      if (currentItemsResponse.error || currentBulkResponse.error || overlappingProjectsResponse.error) {
+        setAvailabilityWarnings([]);
+        setAvailabilityMessage(
+          currentItemsResponse.error?.message ?? currentBulkResponse.error?.message ?? overlappingProjectsResponse.error?.message ?? "Verfügbarkeit konnte nicht geprüft werden."
+        );
+        setAvailabilityLoading(false);
+        return;
+      }
+
+      const currentItems = (currentItemsResponse.data ?? []) as DbAvailabilityItemAssignmentRow[];
+      const currentBulk = (currentBulkResponse.data ?? []) as DbAvailabilityBulkAssignmentRow[];
+      const overlappingProjects = ((overlappingProjectsResponse.data ?? []) as DbAvailabilityProjectRow[]).filter(
+        (overlap) => overlap.status !== "completed" && overlap.status !== "cancelled"
+      );
+      const overlappingProjectIds = overlappingProjects.map((overlap) => overlap.id);
+      const projectById = new Map(overlappingProjects.map((overlap) => [overlap.id, overlap]));
+      const nextWarnings: AvailabilityWarning[] = [];
+
+      if (currentItems.length > 0 && overlappingProjectIds.length > 0) {
+        const itemIds = Array.from(new Set(currentItems.map((assignment) => assignment.item_id)));
+        const [otherItemsResponse, itemDetailsResponse] = await Promise.all([
+          supabase.from("project_item_assignments").select("item_id, position_id, project_id").in("item_id", itemIds).in("project_id", overlappingProjectIds),
+          supabase.from("items").select("id, name, barcode, serial_number").in("id", itemIds)
+        ]);
+
+        if (otherItemsResponse.error || itemDetailsResponse.error) {
+          setAvailabilityMessage(otherItemsResponse.error?.message ?? itemDetailsResponse.error?.message);
+        } else {
+          const otherItems = (otherItemsResponse.data ?? []) as DbAvailabilityItemAssignmentRow[];
+          const itemById = new Map(((itemDetailsResponse.data ?? []) as DbAvailabilityItemRow[]).map((item) => [item.id, item]));
+
+          currentItems.forEach((assignment) => {
+            const conflicts = otherItems.filter((other) => other.item_id === assignment.item_id);
+
+            conflicts.forEach((conflict) => {
+              const item = itemById.get(assignment.item_id);
+              const conflictProject = projectById.get(conflict.project_id);
+
+              if (!item || !conflictProject) {
+                return;
+              }
+
+              nextWarnings.push({
+                action: "Alternative wählen oder Zumietung planen.",
+                detail: `${availabilityItemCode(item)} überschneidet sich mit ${conflictProject.name} (${formatDateTime(conflictProject.load_at)} bis ${formatDateTime(conflictProject.return_at)}).`,
+                id: `item-${assignment.item_id}-${conflict.project_id}`,
+                title: `Doppelt disponiert: ${item.name}`,
+                tone: "warn"
+              });
+            });
+          });
+        }
+      }
+
+      if (currentBulk.length > 0) {
+        const bulkIds = Array.from(new Set(currentBulk.map((assignment) => assignment.bulk_item_id)));
+        const otherBulkPromise =
+          overlappingProjectIds.length > 0
+            ? supabase.from("project_bulk_assignments").select("bulk_item_id, planned_quantity, position_id, project_id").in("bulk_item_id", bulkIds).in("project_id", overlappingProjectIds)
+            : Promise.resolve({ data: [], error: null });
+        const [otherBulkResponse, bulkDetailsResponse] = await Promise.all([
+          otherBulkPromise,
+          supabase.from("bulk_items").select("id, name, total_quantity").in("id", bulkIds)
+        ]);
+
+        if (otherBulkResponse.error || bulkDetailsResponse.error) {
+          setAvailabilityMessage(otherBulkResponse.error?.message ?? bulkDetailsResponse.error?.message);
+        } else {
+          const otherBulk = (otherBulkResponse.data ?? []) as DbAvailabilityBulkAssignmentRow[];
+          const bulkById = new Map(((bulkDetailsResponse.data ?? []) as DbAvailabilityBulkRow[]).map((item) => [item.id, item]));
+          const currentByBulkId = groupSum(currentBulk, (assignment) => assignment.bulk_item_id, (assignment) => Number(assignment.planned_quantity ?? 0));
+          const otherByBulkId = groupSum(otherBulk, (assignment) => assignment.bulk_item_id, (assignment) => Number(assignment.planned_quantity ?? 0));
+          const projectsByBulkId = otherBulk.reduce<Record<string, string[]>>((groups, assignment) => {
+            const projectName = projectById.get(assignment.project_id)?.name;
+            if (!projectName) {
+              return groups;
+            }
+
+            groups[assignment.bulk_item_id] = Array.from(new Set([...(groups[assignment.bulk_item_id] ?? []), projectName]));
+            return groups;
+          }, {});
+
+          Object.entries(currentByBulkId).forEach(([bulkItemId, currentQuantity]) => {
+            const bulkItem = bulkById.get(bulkItemId);
+
+            if (!bulkItem) {
+              return;
+            }
+
+            const overlapQuantity = otherByBulkId[bulkItemId] ?? 0;
+            const requestedQuantity = currentQuantity + overlapQuantity;
+            const shortage = requestedQuantity - Number(bulkItem.total_quantity ?? 0);
+
+            if (shortage <= 0) {
+              return;
+            }
+
+            const projectNames = projectsByBulkId[bulkItemId]?.join(", ") || "keine weiteren Aufträge";
+            nextWarnings.push({
+              action: "Unterdeckung direkt als Zumietung einplanen.",
+              detail: `${requestedQuantity} Stk. geplant, ${bulkItem.total_quantity} Stk. im Bestand. Überschneidung: ${projectNames}.`,
+              id: `bulk-${bulkItemId}`,
+              title: `${shortage} Stk. Unterdeckung: ${bulkItem.name}`,
+              tone: "warn"
+            });
+          });
+        }
+      }
+
+      setAvailabilityWarnings(nextWarnings);
+      setAvailabilityLoading(false);
+    },
+    [profile, supabase]
+  );
+
   useEffect(() => {
     void loadProjects();
     void loadMaterialOptions();
@@ -628,6 +827,10 @@ export function OrdersView({ profile }: OrdersViewProps) {
   useEffect(() => {
     void loadPositions(selectedProject?.id ?? null);
   }, [loadPositions, selectedProject?.id]);
+
+  useEffect(() => {
+    void loadAvailabilityWarnings(selectedProject);
+  }, [loadAvailabilityWarnings, selectedProject]);
 
   const selectedMaterial = materialOptions.find((option) => option.key === positionForm.materialKey) ?? manualMaterialOption;
   const ownMaterialTotal = positions
@@ -898,6 +1101,7 @@ export function OrdersView({ profile }: OrdersViewProps) {
     setPositionForm(initialPositionForm());
     setPositionMessage("Materialposition gespeichert.");
     await loadPositions(selectedProject.id);
+    await loadAvailabilityWarnings(selectedProject);
   }
 
   async function updateStatus(projectId: string, status: ProjectStatusCode) {
@@ -922,7 +1126,7 @@ export function OrdersView({ profile }: OrdersViewProps) {
       <ViewHeader
         eyebrow="Aufträge"
         title="Auftrag disponieren"
-        detail="Auftragsköpfe, Materialpositionen und gruppierte Einzelgeräte werden live in Supabase gespeichert. Verfügbarkeitswarnungen hängen wir als nächsten Schritt daran."
+        detail="Auftragsköpfe, Materialpositionen, gruppierte Einzelgeräte und Verfügbarkeitswarnungen werden live in Supabase verarbeitet."
       />
 
       <div className="mb-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -1178,8 +1382,47 @@ export function OrdersView({ profile }: OrdersViewProps) {
           <div className="grid gap-4 md:grid-cols-3">
             <Panel>
               <SectionTitle icon={AlertTriangle} title="Verfügbarkeit" />
-              <StatusBadge tone="warn">nächster Schritt</StatusBadge>
-              <p className="mt-3 text-sm text-[var(--text2)]">Warnungen werden aus Materialpositionen und Zeitfenster berechnet.</p>
+              <div className="flex flex-wrap gap-2">
+                <StatusBadge tone={!selectedProject ? "neutral" : availabilityWarnings.length > 0 ? "warn" : "good"}>
+                  {!selectedProject
+                    ? "kein Auftrag"
+                    : availabilityWarnings.length > 0
+                      ? `${availabilityWarnings.length} Warnung${availabilityWarnings.length === 1 ? "" : "en"}`
+                      : "keine Konflikte"}
+                </StatusBadge>
+                {availabilityLoading ? <StatusBadge tone="neutral">prüft...</StatusBadge> : null}
+              </div>
+              {selectedProject ? (
+                <p className="mt-3 text-sm text-[var(--text2)]">
+                  Geprüft von {formatDateTime(selectedProject.load_at)} bis {formatDateTime(selectedProject.return_at)}. Warnungen blockieren den Auftrag nicht.
+                </p>
+              ) : (
+                <p className="mt-3 text-sm text-[var(--text2)]">Wähle einen Auftrag, um den Zeitraum gegen bestehende Dispositionen zu prüfen.</p>
+              )}
+              <div className="mt-3 grid gap-2">
+                {availabilityWarnings.map((warning) => (
+                  <ListRow key={warning.id}>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <strong>{warning.title}</strong>
+                      <StatusBadge tone={warning.tone}>Warnung</StatusBadge>
+                    </div>
+                    <p className="text-sm text-[var(--text2)]">{warning.detail}</p>
+                    <p className="text-xs font-bold text-[var(--warning)]">{warning.action}</p>
+                  </ListRow>
+                ))}
+                {selectedProject && !availabilityLoading && availabilityWarnings.length === 0 ? (
+                  <ListRow>
+                    <strong>Material passt im gewählten Zeitraum</strong>
+                    <p className="text-sm text-[var(--text2)]">Einzelgeräte sind nicht doppelt disponiert, Massenware reicht aktuell aus.</p>
+                  </ListRow>
+                ) : null}
+                {availabilityMessage ? (
+                  <ListRow>
+                    <strong>Prüfung unvollständig</strong>
+                    <p className="text-sm text-[var(--text2)]">{availabilityMessage}</p>
+                  </ListRow>
+                ) : null}
+              </div>
             </Panel>
             <Panel>
               <SectionTitle icon={ClipboardCheck} title="Rücknahme" />

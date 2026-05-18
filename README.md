@@ -54,6 +54,7 @@ Details stehen in `docs/tiramigear-supabase-setup.md`.
 - `docs/tiramigear-crew-modul.md`
 - `docs/tiramigear-supabase-setup.md`
 - `docs/tiramigear-supabase-dashboard.md`
+- `docs/tiramigear-deployment.md`
 
 ## Naechste Entwicklungsschritte
 

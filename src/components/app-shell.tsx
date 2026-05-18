@@ -500,6 +500,15 @@ function AuthStateScreen({
   );
 }
 
+function withTimeout<T>(promise: T, timeoutMs: number, message: string): Promise<Awaited<T>> {
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise<never>((_, reject) => {
+      window.setTimeout(() => reject(new Error(message)), timeoutMs);
+    })
+  ]);
+}
+
 export function AppShell() {
   const [active, setActive] = useState<NavKey>("dashboard");
   const [dark, setDark] = useState(false);
@@ -532,37 +541,64 @@ export function AppShell() {
         return;
       }
 
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, org_id, email, name, role")
-        .eq("id", userId)
-        .single();
+      try {
+        const profileRequest = supabase.from("profiles").select("id, org_id, email, name, role").eq("id", userId).single();
+        const { data, error } = await withTimeout(
+          profileRequest,
+          12_000,
+          "Benutzerprofil konnte nicht geladen werden. Bitte Verbindung prüfen."
+        );
 
-      if (!mounted) {
-        return;
-      }
+        if (!mounted) {
+          return;
+        }
 
-      if (error) {
+        if (error) {
+          setProfile(null);
+          setAuthMessage("Dein Login ist gültig, aber das Benutzerprofil wurde noch nicht gefunden.");
+        } else {
+          setProfile(data as UserProfile);
+          setAuthMessage(undefined);
+        }
+
+        setAuthReady(true);
+      } catch (error) {
+        if (!mounted) {
+          return;
+        }
+
         setProfile(null);
-        setAuthMessage("Dein Login ist gültig, aber das Benutzerprofil wurde noch nicht gefunden.");
-      } else {
-        setProfile(data as UserProfile);
-        setAuthMessage(undefined);
-      }
-
-      setAuthReady(true);
-    }
-
-    async function loadSession() {
-      const { data, error } = await supabase.auth.getSession();
-
-      if (error) {
-        setAuthMessage(error.message);
+        setAuthMessage(error instanceof Error ? error.message : "Benutzerprofil konnte nicht geladen werden.");
         setAuthReady(true);
         return;
       }
+    }
 
-      await loadProfile(data.session?.user.id ?? null);
+    async function loadSession() {
+      try {
+        const sessionRequest = supabase.auth.getSession();
+        const { data, error } = await withTimeout(
+          sessionRequest,
+          12_000,
+          "Session konnte nicht geprüft werden. Bitte Verbindung prüfen."
+        );
+
+        if (error) {
+          setAuthMessage(error.message);
+          setAuthReady(true);
+          return;
+        }
+
+        await loadProfile(data.session?.user.id ?? null);
+      } catch (error) {
+        if (!mounted) {
+          return;
+        }
+
+        setAuthMessage(error instanceof Error ? error.message : "Session konnte nicht geprüft werden.");
+        setAuthReady(true);
+        return;
+      }
     }
 
     void loadSession();
