@@ -16,18 +16,21 @@ type InventoryRow = {
   id: string;
   code: string;
   name: string;
+  detail: string;
   type: InventoryTypeLabel;
   status: string;
   statusTone: StatusTone;
   owner: "Eigenmaterial" | "Extern";
   quantity: string;
   finance: string;
+  assetCount: number;
   createdAt?: string;
 };
 
 type DbItemRow = {
   id: string;
   name: string;
+  category: EquipmentCategory;
   barcode: string | null;
   serial_number: string | null;
   condition: ItemCondition | null;
@@ -39,6 +42,7 @@ type DbItemRow = {
 type DbBulkRow = {
   id: string;
   name: string;
+  category: EquipmentCategory;
   barcode: string | null;
   total_quantity: number;
   purchase_price_total: number | string | null;
@@ -56,6 +60,7 @@ type DbCaseRow = {
 type DbExternalRow = {
   id: string;
   name: string;
+  category: EquipmentCategory | null;
   default_quantity: number;
   purchase_price: number | string | null;
   sell_price: number | string | null;
@@ -127,23 +132,27 @@ const demoRows: InventoryRow[] = [
     id: "demo-single",
     code: "TG-LGT-001",
     name: "Robe Spiider #01",
+    detail: "ITEM",
     type: "Einzelgerät",
     status: "Verfügbar",
     statusTone: "good",
     owner: "Eigenmaterial",
     quantity: "1",
-    finance: "Demo"
+    finance: "Demo",
+    assetCount: 1
   },
   {
     id: "demo-bulk",
     code: "TG-CBL-PC10",
     name: "Powercon 10m",
+    detail: "Kabel / Zubehör",
     type: "Massenware",
     status: "Bestand",
     statusTone: "good",
     owner: "Eigenmaterial",
     quantity: "186 Stk.",
-    finance: "Demo"
+    finance: "Demo",
+    assetCount: 1
   }
 ];
 
@@ -181,6 +190,29 @@ function formatCurrency(value?: number | string | null) {
   }).format(numeric);
 }
 
+function formatUnitCurrency(value?: number | string | null) {
+  const formatted = formatCurrency(value);
+  return formatted === "ohne Preis" ? formatted : `${formatted} / Stk.`;
+}
+
+function averageNumber(values: Array<number | string | null | undefined>) {
+  const numericValues = values.map((value) => Number(value)).filter((value) => Number.isFinite(value) && value > 0);
+
+  if (numericValues.length === 0) {
+    return null;
+  }
+
+  return numericValues.reduce((sum, value) => sum + value, 0) / numericValues.length;
+}
+
+function itemCode(item: DbItemRow) {
+  return item.barcode || item.serial_number || `ITEM-${String(item.id).slice(0, 8)}`;
+}
+
+function newestDate(rows: Array<{ created_at: string }>) {
+  return rows.reduce((newest, row) => (new Date(row.created_at) > new Date(newest) ? row.created_at : newest), rows[0]?.created_at ?? "");
+}
+
 function optionalText(value: string) {
   return value.trim() || null;
 }
@@ -206,19 +238,6 @@ function optionalNumber(value: string) {
 function parseQuantity(value: string) {
   const numeric = Number.parseInt(value, 10);
   return Number.isFinite(numeric) && numeric > 0 ? numeric : 1;
-}
-
-function typeCode(type: InventoryTypeLabel) {
-  switch (type) {
-    case "Massenware":
-      return "BULK";
-    case "Case":
-      return "CASE";
-    case "Zumietung":
-      return "EXT";
-    default:
-      return "ITEM";
-  }
 }
 
 function ViewHeader({
@@ -310,19 +329,34 @@ export function InventoryView({ profile }: InventoryViewProps) {
 
     setExternalTableReady(!externalResponse.error);
 
-    const itemRows: InventoryRow[] = ((itemsResponse.data ?? []) as DbItemRow[]).map((item) => {
-      const status = conditionStatus(item.condition as ItemCondition);
+    const groupedItems = new Map<string, DbItemRow[]>();
+
+    ((itemsResponse.data ?? []) as DbItemRow[]).forEach((item) => {
+      const groupKey = [item.name.trim().toLowerCase(), item.category, item.condition ?? "good", Number(item.daily_rate ?? 0)].join("|");
+      groupedItems.set(groupKey, [...(groupedItems.get(groupKey) ?? []), item]);
+    });
+
+    const itemRows: InventoryRow[] = Array.from(groupedItems.values()).map((items) => {
+      const firstItem = items[0];
+      const status = conditionStatus(firstItem.condition as ItemCondition);
+      const codes = items.map(itemCode);
+      const extraCodes = Math.max(0, codes.length - 3);
+      const codeDetail = codes.length > 1 ? `${codes.slice(0, 3).join(" · ")}${extraCodes ? ` · +${extraCodes} weitere` : ""}` : "Einzelnes Asset";
+      const averagePurchasePrice = averageNumber(items.map((item) => item.purchase_price));
+
       return {
-        id: `item-${item.id}`,
-        code: item.barcode || item.serial_number || `ITEM-${String(item.id).slice(0, 8)}`,
-        name: item.name,
+        id: `item-group-${firstItem.id}`,
+        code: codes.length > 1 ? `${codes.length} Assets` : codes[0],
+        name: firstItem.name,
+        detail: `${categoryLabel(firstItem.category)} · ${codeDetail}`,
         type: "Einzelgerät",
         status: status.label,
         statusTone: status.tone,
         owner: "Eigenmaterial",
-        quantity: "1",
-        finance: formatCurrency(item.purchase_price ?? item.daily_rate),
-        createdAt: item.created_at
+        quantity: codes.length > 1 ? `${codes.length} Stk.` : "1",
+        finance: codes.length > 1 ? formatUnitCurrency(averagePurchasePrice ?? firstItem.daily_rate) : formatCurrency(firstItem.purchase_price ?? firstItem.daily_rate),
+        assetCount: codes.length,
+        createdAt: newestDate(items)
       };
     });
 
@@ -330,12 +364,14 @@ export function InventoryView({ profile }: InventoryViewProps) {
       id: `bulk-${item.id}`,
       code: item.barcode || `BULK-${String(item.id).slice(0, 8)}`,
       name: item.name,
+      detail: categoryLabel(item.category),
       type: "Massenware",
       status: "Bestand",
       statusTone: Number(item.total_quantity) > 0 ? "good" : "warn",
       owner: "Eigenmaterial",
       quantity: `${item.total_quantity} Stk.`,
       finance: formatCurrency(item.purchase_price_total ?? item.daily_rate),
+      assetCount: 1,
       createdAt: item.created_at
     }));
 
@@ -343,12 +379,14 @@ export function InventoryView({ profile }: InventoryViewProps) {
       id: `case-${item.id}`,
       code: `CASE-${String(item.id).slice(0, 8)}`,
       name: item.name,
+      detail: "Transport / Packmittel",
       type: "Case",
       status: "Verfügbar",
       statusTone: "good",
       owner: "Eigenmaterial",
       quantity: `${Number(item.empty_weight ?? 0).toFixed(1)} kg leer`,
       finance: "keine Amort.",
+      assetCount: 1,
       createdAt: item.created_at
     }));
 
@@ -358,12 +396,14 @@ export function InventoryView({ profile }: InventoryViewProps) {
           id: `external-${item.id}`,
           code: `EXT-${String(item.id).slice(0, 8)}`,
           name: item.name,
+          detail: categoryLabel(item.category),
           type: "Zumietung",
           status: "Katalog",
           statusTone: "neutral",
           owner: "Extern",
           quantity: `${item.default_quantity} Stk.`,
           finance: formatCurrency(item.purchase_price ?? item.sell_price),
+          assetCount: 1,
           createdAt: item.created_at
         }));
 
@@ -379,7 +419,7 @@ export function InventoryView({ profile }: InventoryViewProps) {
   const filteredRows = rows.filter((row) => {
     const query = search.trim().toLowerCase();
     const matchesSearch = query
-      ? [row.code, row.name, row.type, row.status, row.owner].some((value) => value.toLowerCase().includes(query))
+      ? [row.code, row.name, row.detail, row.type, row.status, row.owner].some((value) => value.toLowerCase().includes(query))
       : true;
     const matchesType = typeFilter === "Alle" || row.type === typeFilter;
     const matchesStatus = statusFilter === "Alle" || row.status === statusFilter;
@@ -389,7 +429,7 @@ export function InventoryView({ profile }: InventoryViewProps) {
   const stats = {
     cases: rows.filter((row) => row.type === "Case").length,
     external: rows.filter((row) => row.type === "Zumietung").length,
-    single: rows.filter((row) => row.type === "Einzelgerät").length,
+    single: rows.filter((row) => row.type === "Einzelgerät").reduce((sum, row) => sum + row.assetCount, 0),
     bulk: rows.filter((row) => row.type === "Massenware").length
   };
 
@@ -485,7 +525,7 @@ export function InventoryView({ profile }: InventoryViewProps) {
       <ViewHeader
         eyebrow="Material"
         title="Inventar & Stückgut"
-        detail="Einzelgeräte werden einzeln geführt. Massenware wie Kabel, Adapter und Kabelbrücken arbeitet mit Stückzahlen. Zumietungen sind als externer Katalog vorbereitet."
+        detail="Einzelgeräte bleiben einzeln identifizierbar, werden in Listen aber nach Modell gruppiert. Massenware wie Kabel, Adapter und Kabelbrücken arbeitet mit Stückzahlen."
       />
 
       <div className="mb-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -567,7 +607,7 @@ export function InventoryView({ profile }: InventoryViewProps) {
                     <td className="px-3 py-4 font-mono text-xs">{row.code}</td>
                     <td className="px-3 py-4">
                       <strong>{row.name}</strong>
-                      <p className="text-xs text-[var(--text2)]">{typeCode(row.type)}</p>
+                      <p className="text-xs text-[var(--text2)]">{row.detail}</p>
                     </td>
                     <td className="px-3 py-4">{row.type}</td>
                     <td className="px-3 py-4">

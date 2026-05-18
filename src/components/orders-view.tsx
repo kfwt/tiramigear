@@ -53,6 +53,85 @@ type ProjectForm = {
   notes: string;
 };
 
+type EquipmentCategory = "audio" | "lighting" | "video" | "truss_rigging" | "cables_accessories" | "other";
+type PositionSourceType = "item" | "bulk_item" | "case" | "external" | "manual";
+
+type MaterialOption = {
+  key: string;
+  id: string | null;
+  itemIds?: string[];
+  availableQuantity?: number;
+  sourceType: PositionSourceType;
+  name: string;
+  label: string;
+  category: EquipmentCategory | null;
+  quantityHint: string;
+  unitPrice: number;
+  purchasePrice?: number;
+  supplier?: string | null;
+};
+
+type ProjectPositionRow = {
+  id: string;
+  source_type: PositionSourceType;
+  source_id: string | null;
+  description: string;
+  category: EquipmentCategory | null;
+  quantity: number | string;
+  days: number | string;
+  unit_price: number | string;
+  total_price: number | string;
+  counts_for_amortization: boolean;
+  created_at: string;
+};
+
+type PositionForm = {
+  materialKey: string;
+  description: string;
+  quantity: string;
+  days: string;
+  unitPrice: string;
+};
+
+type DbItemOptionRow = {
+  id: string;
+  name: string;
+  barcode: string | null;
+  serial_number: string | null;
+  condition: string | null;
+  category: EquipmentCategory | null;
+  daily_rate: number | string | null;
+};
+
+type DbBulkOptionRow = {
+  id: string;
+  name: string;
+  barcode: string | null;
+  category: EquipmentCategory | null;
+  total_quantity: number;
+  daily_rate: number | string | null;
+};
+
+type DbCaseOptionRow = {
+  id: string;
+  name: string;
+  empty_weight: number | string | null;
+};
+
+type DbExternalOptionRow = {
+  id: string;
+  name: string;
+  category: EquipmentCategory | null;
+  default_quantity: number;
+  purchase_price: number | string | null;
+  sell_price: number | string | null;
+  supplier: string | null;
+};
+
+type DbProjectItemAssignmentRow = {
+  item_id: string;
+};
+
 type OrdersViewProps = {
   profile: UserProfile | null;
 };
@@ -90,6 +169,33 @@ const demoProjects: ProjectRow[] = [
   }
 ];
 
+const manualMaterialOption: MaterialOption = {
+  key: "manual",
+  id: null,
+  sourceType: "manual",
+  name: "Manuelle Position",
+  label: "Manuelle Position",
+  category: "other",
+  quantityHint: "frei",
+  unitPrice: 0
+};
+
+const demoPositions: ProjectPositionRow[] = [
+  {
+    id: "demo-position",
+    source_type: "manual",
+    source_id: null,
+    description: "Demo Materialposition",
+    category: "other",
+    quantity: 1,
+    days: 1,
+    unit_price: 0,
+    total_price: 0,
+    counts_for_amortization: false,
+    created_at: "2026-05-18T10:00:00.000Z"
+  }
+];
+
 function addHours(date: Date, hours: number) {
   return new Date(date.getTime() + hours * 60 * 60 * 1000);
 }
@@ -122,12 +228,108 @@ function parseNumber(value: string, fallback: number) {
     return fallback;
   }
 
-  const numeric = Number(value.replace(",", "."));
+  const numeric = Number(value.replace("'", "").replace(",", "."));
   return Number.isFinite(numeric) ? numeric : fallback;
 }
 
 function optionalText(value: string) {
   return value.trim() || null;
+}
+
+function formatCurrency(value?: number | string | null) {
+  const numeric = Number(value);
+
+  if (!Number.isFinite(numeric)) {
+    return "CHF 0.00";
+  }
+
+  return new Intl.NumberFormat("de-CH", {
+    currency: "CHF",
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+    style: "currency"
+  }).format(numeric);
+}
+
+function averageNumber(values: Array<number | string | null | undefined>) {
+  const numericValues = values.map((value) => Number(value)).filter((value) => Number.isFinite(value) && value > 0);
+
+  if (numericValues.length === 0) {
+    return 0;
+  }
+
+  return numericValues.reduce((sum, value) => sum + value, 0) / numericValues.length;
+}
+
+function itemCode(item: DbItemOptionRow) {
+  return item.barcode || item.serial_number || `ITEM-${String(item.id).slice(0, 8)}`;
+}
+
+function itemConditionLabel(value?: string | null) {
+  switch (value) {
+    case "minor_issues":
+      return "mit leichten Mängeln";
+    case "defective":
+      return "defekt";
+    case "in_repair":
+      return "in Reparatur";
+    case "missing":
+      return "vermisst";
+    default:
+      return "verfügbar";
+  }
+}
+
+function categoryLabel(value?: EquipmentCategory | null) {
+  switch (value) {
+    case "audio":
+      return "Audio";
+    case "lighting":
+      return "Licht";
+    case "video":
+      return "Video";
+    case "truss_rigging":
+      return "Truss / Rigging";
+    case "cables_accessories":
+      return "Kabel / Zubehör";
+    default:
+      return "Sonstiges";
+  }
+}
+
+function sourceLabel(sourceType: PositionSourceType) {
+  switch (sourceType) {
+    case "item":
+      return "Einzelgerät";
+    case "bulk_item":
+      return "Massenware";
+    case "case":
+      return "Case";
+    case "external":
+      return "Zumietung";
+    default:
+      return "Manuell";
+  }
+}
+
+function sourceTone(sourceType: PositionSourceType): StatusTone {
+  if (sourceType === "external") {
+    return "warn";
+  }
+
+  if (sourceType === "manual") {
+    return "neutral";
+  }
+
+  return "good";
+}
+
+function positionTotal(quantity: string, days: string, unitPrice: string) {
+  return parseNumber(quantity, 0) * parseNumber(days, 1) * parseNumber(unitPrice, 0);
+}
+
+function requiresWholeQuantity(sourceType: PositionSourceType) {
+  return sourceType === "item" || sourceType === "bulk_item" || sourceType === "external";
 }
 
 function statusMeta(status: ProjectStatusCode) {
@@ -157,6 +359,16 @@ function initialForm(): ProjectForm {
     discountPercent: "0",
     vatRate: "8.1",
     notes: ""
+  };
+}
+
+function initialPositionForm(): PositionForm {
+  return {
+    materialKey: manualMaterialOption.key,
+    description: "",
+    quantity: "1",
+    days: "1",
+    unitPrice: "0"
   };
 }
 
@@ -232,10 +444,117 @@ export function OrdersView({ profile }: OrdersViewProps) {
   const [projects, setProjects] = useState<ProjectRow[]>(isSupabaseConfigured() ? [] : demoProjects);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [form, setForm] = useState<ProjectForm>(() => initialForm());
+  const [positionForm, setPositionForm] = useState<PositionForm>(() => initialPositionForm());
+  const [materialOptions, setMaterialOptions] = useState<MaterialOption[]>([manualMaterialOption]);
+  const [positions, setPositions] = useState<ProjectPositionRow[]>(isSupabaseConfigured() ? [] : demoPositions);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingPosition, setSavingPosition] = useState(false);
   const [message, setMessage] = useState<string>();
+  const [positionMessage, setPositionMessage] = useState<string>();
+  const [externalCatalogReady, setExternalCatalogReady] = useState(false);
   const [lastLoadedAt, setLastLoadedAt] = useState<Date | null>(null);
+
+  const loadMaterialOptions = useCallback(async () => {
+    if (!supabase || !profile) {
+      setMaterialOptions([manualMaterialOption]);
+      return;
+    }
+
+    const [itemsResponse, bulkResponse, casesResponse, externalResponse] = await Promise.all([
+      supabase
+        .from("items")
+        .select("id, name, barcode, serial_number, condition, category, daily_rate")
+        .order("name", { ascending: true }),
+      supabase
+        .from("bulk_items")
+        .select("id, name, barcode, category, total_quantity, daily_rate")
+        .order("name", { ascending: true }),
+      supabase
+        .from("cases")
+        .select("id, name, empty_weight")
+        .order("name", { ascending: true }),
+      supabase
+        .from("external_catalog_items")
+        .select("id, name, category, default_quantity, purchase_price, sell_price, supplier")
+        .eq("is_active", true)
+        .order("name", { ascending: true })
+    ]);
+
+    setExternalCatalogReady(!externalResponse.error);
+
+    const itemGroups = new Map<string, DbItemOptionRow[]>();
+
+    if (!itemsResponse.error) {
+      ((itemsResponse.data ?? []) as DbItemOptionRow[]).forEach((item) => {
+        const groupKey = [item.name.trim().toLowerCase(), item.category ?? "other", item.condition ?? "good", Number(item.daily_rate ?? 0)].join("|");
+        itemGroups.set(groupKey, [...(itemGroups.get(groupKey) ?? []), item]);
+      });
+    }
+
+    const itemOptions: MaterialOption[] = Array.from(itemGroups.values()).map((items) => {
+      const firstItem = items[0];
+      const codes = items.map(itemCode);
+      const conditionHint = itemConditionLabel(firstItem.condition);
+
+      return {
+        key: `item:${items.map((item) => item.id).join(":")}`,
+        id: items.length === 1 ? firstItem.id : null,
+        itemIds: items.map((item) => item.id),
+        availableQuantity: items.length,
+        sourceType: "item",
+        name: firstItem.name,
+        label: items.length > 1 ? `${firstItem.name} · ${items.length} Einzelgeräte` : `${firstItem.name} · ${codes[0]}`,
+        category: firstItem.category,
+        quantityHint: `${items.length} ${conditionHint}`,
+        unitPrice: averageNumber(items.map((item) => item.daily_rate))
+      };
+    });
+
+    const bulkOptions: MaterialOption[] = bulkResponse.error
+      ? []
+      : ((bulkResponse.data ?? []) as DbBulkOptionRow[]).map((item) => ({
+          key: `bulk_item:${item.id}`,
+          id: item.id,
+          sourceType: "bulk_item",
+          name: item.name,
+          label: `${item.name}${item.barcode ? ` · ${item.barcode}` : ""}`,
+          category: item.category,
+          quantityHint: `${item.total_quantity} Stk. Bestand`,
+          availableQuantity: item.total_quantity,
+          unitPrice: Number(item.daily_rate ?? 0)
+        }));
+
+    const caseOptions: MaterialOption[] = casesResponse.error
+      ? []
+      : ((casesResponse.data ?? []) as DbCaseOptionRow[]).map((item) => ({
+          key: `case:${item.id}`,
+          id: item.id,
+          sourceType: "case",
+          name: item.name,
+          label: `${item.name} · Case`,
+          category: "other",
+          quantityHint: `${Number(item.empty_weight ?? 0).toFixed(1)} kg leer`,
+          unitPrice: 0
+        }));
+
+    const externalOptions: MaterialOption[] = externalResponse.error
+      ? []
+      : ((externalResponse.data ?? []) as DbExternalOptionRow[]).map((item) => ({
+          key: `external:${item.id}`,
+          id: item.id,
+          sourceType: "external",
+          name: item.name,
+          label: `${item.name}${item.supplier ? ` · ${item.supplier}` : ""}`,
+          category: item.category,
+          quantityHint: `${item.default_quantity} Stk. Standard`,
+          unitPrice: Number(item.sell_price ?? item.purchase_price ?? 0),
+          purchasePrice: Number(item.purchase_price ?? 0),
+          supplier: item.supplier
+        }));
+
+    setMaterialOptions([manualMaterialOption, ...itemOptions, ...bulkOptions, ...caseOptions, ...externalOptions]);
+  }, [profile, supabase]);
 
   const loadProjects = useCallback(async () => {
     if (!supabase || !profile) {
@@ -266,15 +585,58 @@ export function OrdersView({ profile }: OrdersViewProps) {
     setLoading(false);
   }, [profile, supabase]);
 
+  const loadPositions = useCallback(
+    async (projectId: string | null) => {
+      if (!projectId) {
+        setPositions([]);
+        return;
+      }
+
+      if (!supabase || !profile) {
+        setPositions(isSupabaseConfigured() ? [] : demoPositions);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("project_positions")
+        .select("id, source_type, source_id, description, category, quantity, days, unit_price, total_price, counts_for_amortization, created_at")
+        .eq("project_id", projectId)
+        .order("created_at", { ascending: true });
+
+      if (error) {
+        setPositionMessage(error.message);
+        return;
+      }
+
+      setPositions((data ?? []) as ProjectPositionRow[]);
+      setPositionMessage(undefined);
+    },
+    [profile, supabase]
+  );
+
   useEffect(() => {
     void loadProjects();
-  }, [loadProjects]);
+    void loadMaterialOptions();
+  }, [loadMaterialOptions, loadProjects]);
 
   const selectedProject = projects.find((project) => project.id === selectedId) ?? projects[0] ?? null;
   const statusCounts = statusOptions.map((status) => ({
     ...status,
     count: projects.filter((project) => project.status === status.value).length
   }));
+
+  useEffect(() => {
+    void loadPositions(selectedProject?.id ?? null);
+  }, [loadPositions, selectedProject?.id]);
+
+  const selectedMaterial = materialOptions.find((option) => option.key === positionForm.materialKey) ?? manualMaterialOption;
+  const ownMaterialTotal = positions
+    .filter((position) => position.counts_for_amortization)
+    .reduce((sum, position) => sum + Number(position.total_price ?? 0), 0);
+  const externalTotal = positions
+    .filter((position) => position.source_type === "external")
+    .reduce((sum, position) => sum + Number(position.total_price ?? 0), 0);
+  const currentPositionTotal = positionTotal(positionForm.quantity, positionForm.days, positionForm.unitPrice);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -343,6 +705,201 @@ export function OrdersView({ profile }: OrdersViewProps) {
     await loadProjects();
   }
 
+  async function handleAddPosition(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!supabase || !profile || !selectedProject) {
+      setPositionMessage("Bitte zuerst einen Auftrag auswählen.");
+      return;
+    }
+
+    const description = positionForm.description.trim() || selectedMaterial.name;
+    const parsedQuantity = selectedMaterial.sourceType === "case" ? 1 : parseNumber(positionForm.quantity, 1);
+    const days = parseNumber(positionForm.days, 1);
+    const unitPrice = parseNumber(positionForm.unitPrice, selectedMaterial.unitPrice);
+    const quantity = requiresWholeQuantity(selectedMaterial.sourceType) ? Math.round(parsedQuantity) : parsedQuantity;
+    const totalPrice = quantity * days * unitPrice;
+
+    if (!description) {
+      setPositionMessage("Bitte eine Beschreibung erfassen.");
+      return;
+    }
+
+    if (parsedQuantity <= 0 || days <= 0) {
+      setPositionMessage("Menge und Tage müssen grösser als 0 sein.");
+      return;
+    }
+
+    if (requiresWholeQuantity(selectedMaterial.sourceType) && !Number.isInteger(parsedQuantity)) {
+      setPositionMessage("Einzelgeräte, Massenware und Zumietung brauchen ganze Stückzahlen.");
+      return;
+    }
+
+    if (selectedMaterial.availableQuantity && quantity > selectedMaterial.availableQuantity) {
+      setPositionMessage(`Es sind nur ${selectedMaterial.availableQuantity} Stück in dieser Auswahl verfügbar.`);
+      return;
+    }
+
+    setSavingPosition(true);
+    setPositionMessage(undefined);
+
+    let assignedItemIds: string[] = [];
+
+    if (selectedMaterial.sourceType === "item") {
+      const itemIds = selectedMaterial.itemIds ?? (selectedMaterial.id ? [selectedMaterial.id] : []);
+
+      if (itemIds.length === 0) {
+        setSavingPosition(false);
+        setPositionMessage("Diese Einzelgeräte-Gruppe enthält keine Geräte.");
+        return;
+      }
+
+      const { data: existingItems, error } = await supabase
+        .from("project_item_assignments")
+        .select("item_id")
+        .eq("project_id", selectedProject.id)
+        .in("item_id", itemIds);
+
+      if (error) {
+        setSavingPosition(false);
+        setPositionMessage(error.message);
+        return;
+      }
+
+      const blockedItemIds = new Set(((existingItems ?? []) as DbProjectItemAssignmentRow[]).map((item) => item.item_id));
+      assignedItemIds = itemIds.filter((itemId) => !blockedItemIds.has(itemId)).slice(0, quantity);
+
+      if (assignedItemIds.length < quantity) {
+        setSavingPosition(false);
+        setPositionMessage(`In dieser Einzelgeräte-Gruppe sind nur ${assignedItemIds.length} Stück für diesen Auftrag frei.`);
+        return;
+      }
+    }
+
+    if (selectedMaterial.sourceType === "bulk_item" && selectedMaterial.id) {
+      const { data: existingBulk } = await supabase
+        .from("project_bulk_assignments")
+        .select("id")
+        .eq("project_id", selectedProject.id)
+        .eq("bulk_item_id", selectedMaterial.id)
+        .maybeSingle();
+
+      if (existingBulk) {
+        setSavingPosition(false);
+        setPositionMessage("Diese Massenware ist bereits auf dem Auftrag.");
+        return;
+      }
+    }
+
+    const countsForAmortization = selectedMaterial.sourceType === "item" || selectedMaterial.sourceType === "bulk_item";
+    const sourceId =
+      selectedMaterial.sourceType === "item"
+        ? assignedItemIds.length === 1
+          ? assignedItemIds[0]
+          : null
+        : selectedMaterial.sourceType === "manual" || selectedMaterial.sourceType === "external"
+          ? null
+          : selectedMaterial.id;
+
+    const { data: positionData, error: positionError } = await supabase
+      .from("project_positions")
+      .insert({
+        category: selectedMaterial.category,
+        counts_for_amortization: countsForAmortization,
+        days,
+        description,
+        org_id: profile.org_id,
+        project_id: selectedProject.id,
+        quantity,
+        source_id: sourceId,
+        source_type: selectedMaterial.sourceType,
+        total_price: totalPrice,
+        unit_price: unitPrice
+      })
+      .select("id")
+      .single();
+
+    if (positionError || !positionData?.id) {
+      setSavingPosition(false);
+      setPositionMessage(positionError?.message ?? "Position konnte nicht gespeichert werden.");
+      return;
+    }
+
+    const positionId = positionData.id as string;
+
+    if (selectedMaterial.sourceType === "item" && assignedItemIds.length > 0) {
+      const { error } = await supabase.from("project_item_assignments").insert(
+        assignedItemIds.map((itemId) => ({
+          item_id: itemId,
+          org_id: profile.org_id,
+          position_id: positionId,
+          project_id: selectedProject.id
+        }))
+      );
+
+      if (error) {
+        setSavingPosition(false);
+        setPositionMessage(error.message);
+        await loadPositions(selectedProject.id);
+        return;
+      }
+    }
+
+    if (selectedMaterial.sourceType === "bulk_item" && selectedMaterial.id) {
+      const { error } = await supabase.from("project_bulk_assignments").insert({
+        bulk_item_id: selectedMaterial.id,
+        org_id: profile.org_id,
+        planned_quantity: Math.round(quantity),
+        position_id: positionId,
+        project_id: selectedProject.id
+      });
+
+      if (error) {
+        setSavingPosition(false);
+        setPositionMessage(error.message);
+        await loadPositions(selectedProject.id);
+        return;
+      }
+    }
+
+    if (selectedMaterial.sourceType === "external") {
+      const { data: externalData, error } = await supabase
+        .from("external_rental_items")
+        .insert({
+          category: selectedMaterial.category,
+          description,
+          org_id: profile.org_id,
+          position_id: positionId,
+          project_id: selectedProject.id,
+          purchase_price: selectedMaterial.purchasePrice ?? null,
+          quantity: Math.max(1, Math.round(quantity)),
+          rental_end_at: selectedProject.return_at,
+          rental_start_at: selectedProject.load_at,
+          sell_price: totalPrice,
+          status: "need_open",
+          supplier: selectedMaterial.supplier ?? null
+        })
+        .select("id")
+        .single();
+
+      if (error) {
+        setSavingPosition(false);
+        setPositionMessage(error.message);
+        await loadPositions(selectedProject.id);
+        return;
+      }
+
+      if (externalData?.id) {
+        await supabase.from("project_positions").update({ source_id: externalData.id }).eq("id", positionId);
+      }
+    }
+
+    setSavingPosition(false);
+    setPositionForm(initialPositionForm());
+    setPositionMessage("Materialposition gespeichert.");
+    await loadPositions(selectedProject.id);
+  }
+
   async function updateStatus(projectId: string, status: ProjectStatusCode) {
     if (!supabase) {
       return;
@@ -365,7 +922,7 @@ export function OrdersView({ profile }: OrdersViewProps) {
       <ViewHeader
         eyebrow="Aufträge"
         title="Auftrag disponieren"
-        detail="Auftragsköpfe werden jetzt live in Supabase gespeichert. Materialpositionen, Verfügbarkeit und Zumietung hängen wir als nächsten Schritt daran."
+        detail="Auftragsköpfe, Materialpositionen und gruppierte Einzelgeräte werden live in Supabase gespeichert. Verfügbarkeitswarnungen hängen wir als nächsten Schritt daran."
       />
 
       <div className="mb-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -464,6 +1021,156 @@ export function OrdersView({ profile }: OrdersViewProps) {
                   </Select>
                 </label>
                 <StatusBadge tone={statusMeta(selectedProject.status).tone}>{statusMeta(selectedProject.status).label}</StatusBadge>
+              </div>
+            </Panel>
+          ) : null}
+
+          {selectedProject ? (
+            <Panel>
+              <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                <SectionTitle icon={ClipboardList} title="Materialpositionen" detail={selectedProject.name} />
+                <div className="flex flex-wrap gap-2">
+                  <StatusBadge tone="good">Eigenmaterial {formatCurrency(ownMaterialTotal)}</StatusBadge>
+                  <StatusBadge tone={externalTotal > 0 ? "warn" : "neutral"}>Zumietung {formatCurrency(externalTotal)}</StatusBadge>
+                </div>
+              </div>
+
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+                <div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[760px] border-collapse text-left">
+                      <thead>
+                        <tr className="border-b border-[var(--line)] text-xs uppercase text-[var(--text2)]">
+                          <th className="px-3 py-3 font-bold">Position</th>
+                          <th className="px-3 py-3 font-bold">Quelle</th>
+                          <th className="px-3 py-3 font-bold">Menge</th>
+                          <th className="px-3 py-3 font-bold">Tage</th>
+                          <th className="px-3 py-3 font-bold">EP netto</th>
+                          <th className="px-3 py-3 font-bold">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {positions.map((position) => (
+                          <tr key={position.id} className="border-b border-[var(--line)] last:border-0">
+                            <td className="px-3 py-4">
+                              <strong>{position.description}</strong>
+                              <p className="text-xs text-[var(--text2)]">{categoryLabel(position.category)}</p>
+                            </td>
+                            <td className="px-3 py-4">
+                              <StatusBadge tone={sourceTone(position.source_type)}>{sourceLabel(position.source_type)}</StatusBadge>
+                            </td>
+                            <td className="px-3 py-4">{Number(position.quantity).toLocaleString("de-CH")}</td>
+                            <td className="px-3 py-4">{Number(position.days).toLocaleString("de-CH")}</td>
+                            <td className="px-3 py-4">{formatCurrency(position.unit_price)}</td>
+                            <td className="px-3 py-4 font-bold">{formatCurrency(position.total_price)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {positions.length === 0 ? (
+                    <ListRow className="mt-3">
+                      <strong>Noch keine Materialpositionen</strong>
+                      <p className="text-sm text-[var(--text2)]">Wähle rechts Material aus Inventar, Massenware, Cases oder Zumietung.</p>
+                    </ListRow>
+                  ) : null}
+                </div>
+
+                <form className="grid gap-3" onSubmit={handleAddPosition}>
+                  <label>
+                    <span className="mb-1 block text-xs font-bold uppercase text-[var(--text2)]">Material</span>
+                    <Select
+                      onChange={(event) => {
+                        const next = materialOptions.find((option) => option.key === event.target.value) ?? manualMaterialOption;
+                        const currentQuantity = parseNumber(positionForm.quantity, 1);
+                        const cappedQuantity = next.availableQuantity ? Math.min(Math.max(1, Math.round(currentQuantity)), next.availableQuantity) : currentQuantity;
+                        setPositionForm((value) => ({
+                          ...value,
+                          description: next.sourceType === "manual" ? value.description : next.name,
+                          materialKey: next.key,
+                          quantity: next.sourceType === "case" ? "1" : String(cappedQuantity),
+                          unitPrice: String(next.unitPrice)
+                        }));
+                      }}
+                      value={positionForm.materialKey}
+                    >
+                      {materialOptions.map((option) => (
+                        <option key={option.key} value={option.key}>
+                          {sourceLabel(option.sourceType)} · {option.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </label>
+
+                  <ListRow>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <StatusBadge tone={sourceTone(selectedMaterial.sourceType)}>{sourceLabel(selectedMaterial.sourceType)}</StatusBadge>
+                      <StatusBadge>{selectedMaterial.quantityHint}</StatusBadge>
+                      {selectedMaterial.sourceType === "external" ? <StatusBadge tone="warn">keine Amortisation</StatusBadge> : null}
+                    </div>
+                  </ListRow>
+
+                  <label>
+                    <span className="mb-1 block text-xs font-bold uppercase text-[var(--text2)]">Beschreibung</span>
+                    <Field
+                      onChange={(event) => setPositionForm((value) => ({ ...value, description: event.target.value }))}
+                      placeholder="z.B. 4x Moving Light extern"
+                      value={positionForm.description}
+                    />
+                  </label>
+
+                  <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-1">
+                    <label>
+                      <span className="mb-1 block text-xs font-bold uppercase text-[var(--text2)]">Menge</span>
+                      <Field
+                        disabled={selectedMaterial.sourceType === "case"}
+                        max={selectedMaterial.availableQuantity}
+                        min={1}
+                        onChange={(event) => setPositionForm((value) => ({ ...value, quantity: event.target.value }))}
+                        step={selectedMaterial.sourceType === "manual" ? "0.25" : "1"}
+                        type="number"
+                        value={positionForm.quantity}
+                      />
+                    </label>
+                    <label>
+                      <span className="mb-1 block text-xs font-bold uppercase text-[var(--text2)]">Tage</span>
+                      <Field
+                        min={0.25}
+                        onChange={(event) => setPositionForm((value) => ({ ...value, days: event.target.value }))}
+                        step="0.25"
+                        type="number"
+                        value={positionForm.days}
+                      />
+                    </label>
+                    <label>
+                      <span className="mb-1 block text-xs font-bold uppercase text-[var(--text2)]">EP netto</span>
+                      <Field onChange={(event) => setPositionForm((value) => ({ ...value, unitPrice: event.target.value }))} value={positionForm.unitPrice} />
+                    </label>
+                  </div>
+
+                  <div className="rounded-lg bg-[var(--bg2)] p-3">
+                    <span className="text-xs font-bold uppercase text-[var(--text2)]">Position total</span>
+                    <strong className="mt-1 block font-heading text-2xl">{formatCurrency(currentPositionTotal)}</strong>
+                  </div>
+
+                  {!externalCatalogReady ? (
+                    <ListRow>
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--warning)]" aria-hidden />
+                        <p className="text-sm text-[var(--text2)]">Zumietungs-Katalog ist noch nicht aktiv. Manuelle und eigene Positionen funktionieren bereits.</p>
+                      </div>
+                    </ListRow>
+                  ) : null}
+
+                  <Button disabled={savingPosition || !selectedProject} type="submit" variant="primary" className="inline-flex items-center justify-center gap-2">
+                    {savingPosition ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Plus className="h-4 w-4" aria-hidden />}
+                    {savingPosition ? "Speichern..." : "Position hinzufügen"}
+                  </Button>
+
+                  {positionMessage ? (
+                    <div className="rounded-lg border border-[var(--line)] bg-[var(--bg2)] p-3 text-sm text-[var(--text2)]">{positionMessage}</div>
+                  ) : null}
+                </form>
               </div>
             </Panel>
           ) : null}
