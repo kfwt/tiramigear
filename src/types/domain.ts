@@ -10,6 +10,18 @@ export type UserProfile = {
   role: AppRole;
 };
 
+export type ProjectStatusCode =
+  | "inquiry_calculation"
+  | "planned"
+  | "confirmed"
+  | "packing"
+  | "loaded"
+  | "in_use"
+  | "returned"
+  | "in_check"
+  | "completed"
+  | "cancelled";
+
 export type ProjectStatus =
   | "Anfrage / Kalkulation"
   | "Geplant"

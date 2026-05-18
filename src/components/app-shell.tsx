@@ -19,7 +19,6 @@ import {
   Package as PackageIcon,
   Plus,
   ScanLine,
-  Settings,
   Shield,
   Sun,
   Truck,
@@ -29,10 +28,11 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { InventoryView } from "@/components/inventory-view";
+import { OrdersView } from "@/components/orders-view";
 import { Button, Field, ListRow, Panel, Select, StatusBadge } from "@/components/ui";
-import { dashboardMetrics, packageTemplates, projectRows, rentalStatuses } from "@/data/demo";
+import { dashboardMetrics, packageTemplates, projectRows } from "@/data/demo";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
-import type { NavKey, ProjectStatus, StatusTone, UserProfile } from "@/types/domain";
+import type { NavKey, StatusTone, UserProfile } from "@/types/domain";
 
 type NavItem = {
   key: NavKey;
@@ -55,18 +55,6 @@ const roleLabels: Record<UserProfile["role"], string> = {
   logistics: "Logistik",
   technician: "Technik"
 };
-
-const statusFlow: ProjectStatus[] = [
-  "Anfrage / Kalkulation",
-  "Geplant",
-  "Bestätigt",
-  "In Packung",
-  "Geladen",
-  "Im Einsatz",
-  "Retour",
-  "In Kontrolle",
-  "Abgeschlossen"
-];
 
 const warningRows = [
   {
@@ -335,130 +323,6 @@ function PackagesView() {
   );
 }
 
-function WorkflowStrip({ current }: { current: ProjectStatus }) {
-  const currentIndex = statusFlow.indexOf(current);
-
-  return (
-    <div className="flex gap-2 overflow-x-auto pb-1">
-      {statusFlow.map((status, index) => {
-        const active = index <= currentIndex;
-        return (
-          <div
-            key={status}
-            className={clsx(
-              "flex min-w-[138px] items-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold",
-              active
-                ? "border-[var(--cyan)] bg-[rgba(0,204,204,0.12)] text-[var(--text)]"
-                : "border-[var(--line)] bg-[var(--bg2)] text-[var(--text2)]"
-            )}
-          >
-            {active ? <CheckCircle2 className="h-4 w-4 text-[var(--cyan)]" /> : <span className="h-4 w-4 rounded-full border border-[var(--line)]" />}
-            {status}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function OrdersView() {
-  return (
-    <>
-      <ViewHeader
-        eyebrow="Aufträge"
-        title="Auftrag disponieren"
-        detail="Von Anfrage bis Abschluss: Materialwarnungen bleiben sichtbar, Rücknahme und Schäden sind Pflicht im MVP."
-      />
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="grid gap-4">
-          <Panel>
-            <SectionTitle icon={ClipboardList} title="Projektkopf" />
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              <label>
-                <span className="mb-1 block text-xs font-bold uppercase text-[var(--text2)]">Auftrag</span>
-                <Field defaultValue="Festival Setup" />
-              </label>
-              <label>
-                <span className="mb-1 block text-xs font-bold uppercase text-[var(--text2)]">Kunde</span>
-                <Field defaultValue="StageOne" />
-              </label>
-              <label>
-                <span className="mb-1 block text-xs font-bold uppercase text-[var(--text2)]">Laden</span>
-                <Field defaultValue="27.05.2026 08:00" />
-              </label>
-              <label>
-                <span className="mb-1 block text-xs font-bold uppercase text-[var(--text2)]">Retour</span>
-                <Field defaultValue="29.05.2026 16:00" />
-              </label>
-            </div>
-          </Panel>
-          <Panel>
-            <SectionTitle icon={Settings} title="Statusfluss" />
-            <WorkflowStrip current="In Packung" />
-          </Panel>
-          <Panel>
-            <SectionTitle icon={AlertTriangle} title="Verfügbarkeit & Zumietung" />
-            <div className="grid gap-3 lg:grid-cols-3">
-              {rentalStatuses.map((status) => (
-                <ListRow key={status.label}>
-                  <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
-                  <strong>{status.detail}</strong>
-                </ListRow>
-              ))}
-            </div>
-          </Panel>
-          <Panel>
-            <SectionTitle icon={ClipboardCheck} title="Rücknahme & Schaden" />
-            <div className="grid gap-3 md:grid-cols-3">
-              <ListRow>
-                <StatusBadge tone="good">Retour erfasst</StatusBadge>
-                <strong>148 / 162 Positionen</strong>
-              </ListRow>
-              <ListRow>
-                <StatusBadge tone="bad">Schäden</StatusBadge>
-                <strong>2 offen</strong>
-              </ListRow>
-              <ListRow>
-                <StatusBadge tone="warn">Abschluss gesperrt</StatusBadge>
-                <strong>Kontrolle fehlt</strong>
-              </ListRow>
-            </div>
-          </Panel>
-        </div>
-        <Panel>
-          <SectionTitle icon={FileText} title="Kalkulation" />
-          <div className="grid gap-3 text-sm">
-            <div className="flex justify-between gap-4 border-b border-[var(--line)] py-2">
-              <span className="text-[var(--text2)]">Eigenmaterial netto</span>
-              <strong>{"CHF 8'420"}</strong>
-            </div>
-            <div className="flex justify-between gap-4 border-b border-[var(--line)] py-2">
-              <span className="text-[var(--text2)]">Zumietung</span>
-              <strong>{"CHF 1'180"}</strong>
-            </div>
-            <div className="flex justify-between gap-4 border-b border-[var(--line)] py-2">
-              <span className="text-[var(--text2)]">Transport / Personal</span>
-              <strong>{"CHF 2'640"}</strong>
-            </div>
-            <div className="flex justify-between gap-4 border-b border-[var(--line)] py-2">
-              <span className="text-[var(--text2)]">MwSt.</span>
-              <strong>separat</strong>
-            </div>
-            <div className="mt-2 rounded-lg bg-[var(--bg2)] p-3">
-              <span className="text-xs font-bold uppercase text-[var(--text2)]">Amortisationsbasis</span>
-              <strong className="mt-1 block font-heading text-2xl">{"CHF 8'420"}</strong>
-            </div>
-            <Button variant="primary" className="mt-1 inline-flex items-center justify-center gap-2">
-              <CheckCircle2 className="h-4 w-4" aria-hidden />
-              Auftrag abschliessen
-            </Button>
-          </div>
-        </Panel>
-      </div>
-    </>
-  );
-}
-
 function LogisticsView() {
   return (
     <>
@@ -580,7 +444,7 @@ function renderView(active: NavKey, profile: UserProfile | null) {
     case "packages":
       return <PackagesView />;
     case "orders":
-      return <OrdersView />;
+      return <OrdersView profile={profile} />;
     case "logistics":
       return <LogisticsView />;
     case "admin":

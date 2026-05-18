@@ -1,0 +1,580 @@
+"use client";
+
+import clsx from "clsx";
+import {
+  AlertTriangle,
+  CalendarClock,
+  CheckCircle2,
+  ClipboardCheck,
+  ClipboardList,
+  FileText,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Settings
+} from "lucide-react";
+import type { FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Button, Field, ListRow, Panel, Select, StatusBadge } from "@/components/ui";
+import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase";
+import type { ProjectStatus, ProjectStatusCode, StatusTone, UserProfile } from "@/types/domain";
+
+type ProjectRow = {
+  id: string;
+  name: string;
+  client: string | null;
+  location: string | null;
+  status: ProjectStatusCode;
+  event_start_at: string | null;
+  event_end_at: string | null;
+  pack_at: string | null;
+  load_at: string;
+  return_at: string;
+  check_due_at: string | null;
+  discount_percent: number | string;
+  vat_rate: number | string;
+  notes: string | null;
+  created_at: string;
+};
+
+type ProjectForm = {
+  name: string;
+  client: string;
+  location: string;
+  status: ProjectStatusCode;
+  eventStartAt: string;
+  eventEndAt: string;
+  packAt: string;
+  loadAt: string;
+  returnAt: string;
+  checkDueAt: string;
+  discountPercent: string;
+  vatRate: string;
+  notes: string;
+};
+
+type OrdersViewProps = {
+  profile: UserProfile | null;
+};
+
+const statusOptions: Array<{ value: ProjectStatusCode; label: ProjectStatus; tone: StatusTone }> = [
+  { value: "inquiry_calculation", label: "Anfrage / Kalkulation", tone: "warn" },
+  { value: "planned", label: "Geplant", tone: "warn" },
+  { value: "confirmed", label: "Bestätigt", tone: "good" },
+  { value: "packing", label: "In Packung", tone: "warn" },
+  { value: "loaded", label: "Geladen", tone: "good" },
+  { value: "in_use", label: "Im Einsatz", tone: "good" },
+  { value: "returned", label: "Retour", tone: "warn" },
+  { value: "in_check", label: "In Kontrolle", tone: "warn" },
+  { value: "completed", label: "Abgeschlossen", tone: "good" },
+  { value: "cancelled", label: "Storniert", tone: "bad" }
+];
+
+const demoProjects: ProjectRow[] = [
+  {
+    id: "demo-festival",
+    name: "Festival Setup",
+    client: "StageOne",
+    location: "Basel",
+    status: "planned",
+    event_start_at: "2026-05-28T16:00:00.000Z",
+    event_end_at: "2026-05-29T01:00:00.000Z",
+    pack_at: "2026-05-27T08:00:00.000Z",
+    load_at: "2026-05-27T10:00:00.000Z",
+    return_at: "2026-05-29T16:00:00.000Z",
+    check_due_at: "2026-05-30T12:00:00.000Z",
+    discount_percent: 0,
+    vat_rate: 8.1,
+    notes: "Demo-Auftrag",
+    created_at: "2026-05-18T10:00:00.000Z"
+  }
+];
+
+function addHours(date: Date, hours: number) {
+  return new Date(date.getTime() + hours * 60 * 60 * 1000);
+}
+
+function toDateTimeInput(date: Date) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+function fromDateTimeInput(value: string) {
+  return value ? new Date(value).toISOString() : null;
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) {
+    return "offen";
+  }
+
+  return new Intl.DateTimeFormat("de-CH", {
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  }).format(new Date(value));
+}
+
+function parseNumber(value: string, fallback: number) {
+  if (!value.trim()) {
+    return fallback;
+  }
+
+  const numeric = Number(value.replace(",", "."));
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function optionalText(value: string) {
+  return value.trim() || null;
+}
+
+function statusMeta(status: ProjectStatusCode) {
+  return statusOptions.find((option) => option.value === status) ?? statusOptions[0];
+}
+
+function initialForm(): ProjectForm {
+  const now = new Date();
+  const eventStart = addHours(now, 24 * 7);
+  const eventEnd = addHours(eventStart, 8);
+  const packAt = addHours(eventStart, -30);
+  const loadAt = addHours(eventStart, -24);
+  const returnAt = addHours(eventEnd, 16);
+  const checkDueAt = addHours(returnAt, 24);
+
+  return {
+    name: "",
+    client: "",
+    location: "",
+    status: "inquiry_calculation",
+    eventStartAt: toDateTimeInput(eventStart),
+    eventEndAt: toDateTimeInput(eventEnd),
+    packAt: toDateTimeInput(packAt),
+    loadAt: toDateTimeInput(loadAt),
+    returnAt: toDateTimeInput(returnAt),
+    checkDueAt: toDateTimeInput(checkDueAt),
+    discountPercent: "0",
+    vatRate: "8.1",
+    notes: ""
+  };
+}
+
+function ViewHeader({
+  eyebrow,
+  title,
+  detail
+}: {
+  eyebrow: string;
+  title: string;
+  detail: string;
+}) {
+  return (
+    <div className="mb-4">
+      <p className="text-xs font-bold uppercase text-[var(--text2)]">{eyebrow}</p>
+      <h1 className="mt-1 font-heading text-2xl font-bold text-[var(--text)]">{title}</h1>
+      <p className="mt-1 max-w-3xl text-sm text-[var(--text2)]">{detail}</p>
+    </div>
+  );
+}
+
+function SectionTitle({
+  icon: Icon,
+  title,
+  detail
+}: {
+  icon: typeof ClipboardList;
+  title: string;
+  detail?: string;
+}) {
+  return (
+    <div className="mb-3 flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <Icon className="h-4 w-4 shrink-0 text-[var(--cyan)]" aria-hidden />
+          <h2 className="truncate font-heading text-lg font-bold">{title}</h2>
+        </div>
+        {detail ? <p className="mt-1 text-sm text-[var(--text2)]">{detail}</p> : null}
+      </div>
+    </div>
+  );
+}
+
+function WorkflowStrip({ current }: { current: ProjectStatusCode }) {
+  const workflow = statusOptions.filter((status) => status.value !== "cancelled");
+  const currentIndex = workflow.findIndex((status) => status.value === current);
+
+  return (
+    <div className="flex gap-2 overflow-x-auto pb-1">
+      {workflow.map((status, index) => {
+        const active = current !== "cancelled" && index <= currentIndex;
+        return (
+          <div
+            key={status.value}
+            className={clsx(
+              "flex min-w-[138px] items-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold",
+              active
+                ? "border-[var(--cyan)] bg-[rgba(0,204,204,0.12)] text-[var(--text)]"
+                : "border-[var(--line)] bg-[var(--bg2)] text-[var(--text2)]"
+            )}
+          >
+            {active ? <CheckCircle2 className="h-4 w-4 text-[var(--cyan)]" aria-hidden /> : <span className="h-4 w-4 rounded-full border border-[var(--line)]" />}
+            {status.label}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export function OrdersView({ profile }: OrdersViewProps) {
+  const supabase = useMemo(() => getSupabaseBrowserClient(), []);
+  const [projects, setProjects] = useState<ProjectRow[]>(isSupabaseConfigured() ? [] : demoProjects);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [form, setForm] = useState<ProjectForm>(() => initialForm());
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string>();
+  const [lastLoadedAt, setLastLoadedAt] = useState<Date | null>(null);
+
+  const loadProjects = useCallback(async () => {
+    if (!supabase || !profile) {
+      setProjects(isSupabaseConfigured() ? [] : demoProjects);
+      return;
+    }
+
+    setLoading(true);
+    setMessage(undefined);
+
+    const { data, error } = await supabase
+      .from("projects")
+      .select(
+        "id, name, client, location, status, event_start_at, event_end_at, pack_at, load_at, return_at, check_due_at, discount_percent, vat_rate, notes, created_at"
+      )
+      .order("load_at", { ascending: true });
+
+    if (error) {
+      setMessage(error.message);
+      setLoading(false);
+      return;
+    }
+
+    const loadedProjects = (data ?? []) as ProjectRow[];
+    setProjects(loadedProjects);
+    setSelectedId((current) => current ?? loadedProjects[0]?.id ?? null);
+    setLastLoadedAt(new Date());
+    setLoading(false);
+  }, [profile, supabase]);
+
+  useEffect(() => {
+    void loadProjects();
+  }, [loadProjects]);
+
+  const selectedProject = projects.find((project) => project.id === selectedId) ?? projects[0] ?? null;
+  const statusCounts = statusOptions.map((status) => ({
+    ...status,
+    count: projects.filter((project) => project.status === status.value).length
+  }));
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!supabase || !profile) {
+      setMessage("Bitte zuerst einloggen. Ohne Profil kann kein Auftrag gespeichert werden.");
+      return;
+    }
+
+    const loadAt = fromDateTimeInput(form.loadAt);
+    const returnAt = fromDateTimeInput(form.returnAt);
+
+    if (!form.name.trim() || !loadAt || !returnAt) {
+      setMessage("Bitte Auftrag, Ladezeit und Retourzeit erfassen.");
+      return;
+    }
+
+    if (new Date(returnAt) < new Date(loadAt)) {
+      setMessage("Retour muss nach dem Ladedatum liegen.");
+      return;
+    }
+
+    const eventStartAt = fromDateTimeInput(form.eventStartAt);
+    const eventEndAt = fromDateTimeInput(form.eventEndAt);
+
+    if (eventStartAt && eventEndAt && new Date(eventEndAt) < new Date(eventStartAt)) {
+      setMessage("Event-Ende muss nach Event-Beginn liegen.");
+      return;
+    }
+
+    setSaving(true);
+    setMessage(undefined);
+
+    const { data, error } = await supabase
+      .from("projects")
+      .insert({
+        check_due_at: fromDateTimeInput(form.checkDueAt),
+        client: optionalText(form.client),
+        created_by: profile.id,
+        discount_percent: parseNumber(form.discountPercent, 0),
+        event_end_at: eventEndAt,
+        event_start_at: eventStartAt,
+        load_at: loadAt,
+        location: optionalText(form.location),
+        name: form.name.trim(),
+        notes: optionalText(form.notes),
+        org_id: profile.org_id,
+        pack_at: fromDateTimeInput(form.packAt),
+        return_at: returnAt,
+        status: form.status,
+        vat_rate: parseNumber(form.vatRate, 8.1)
+      })
+      .select("id")
+      .single();
+
+    setSaving(false);
+
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+
+    setForm(initialForm());
+    setSelectedId(data?.id ?? null);
+    setMessage("Auftrag gespeichert.");
+    await loadProjects();
+  }
+
+  async function updateStatus(projectId: string, status: ProjectStatusCode) {
+    if (!supabase) {
+      return;
+    }
+
+    setMessage(undefined);
+
+    const { error } = await supabase.from("projects").update({ status }).eq("id", projectId);
+
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+
+    setProjects((current) => current.map((project) => (project.id === projectId ? { ...project, status } : project)));
+  }
+
+  return (
+    <>
+      <ViewHeader
+        eyebrow="Aufträge"
+        title="Auftrag disponieren"
+        detail="Auftragsköpfe werden jetzt live in Supabase gespeichert. Materialpositionen, Verfügbarkeit und Zumietung hängen wir als nächsten Schritt daran."
+      />
+
+      <div className="mb-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <Panel>
+          <p className="text-sm font-medium text-[var(--text2)]">Aufträge total</p>
+          <strong className="mt-2 block font-heading text-3xl">{projects.length}</strong>
+        </Panel>
+        {statusCounts.slice(0, 3).map((status) => (
+          <Panel key={status.value}>
+            <p className="text-sm font-medium text-[var(--text2)]">{status.label}</p>
+            <div className="mt-2 flex items-end justify-between gap-3">
+              <strong className="font-heading text-3xl leading-none">{status.count}</strong>
+              <StatusBadge tone={status.tone}>{status.count === 1 ? "Auftrag" : "Aufträge"}</StatusBadge>
+            </div>
+          </Panel>
+        ))}
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <div className="grid gap-4">
+          <Panel>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <SectionTitle
+                icon={ClipboardList}
+                title="Live-Auftragsliste"
+                detail={lastLoadedAt ? `Geladen ${lastLoadedAt.toLocaleTimeString("de-CH")}` : undefined}
+              />
+              <Button className="inline-flex items-center gap-2" onClick={() => void loadProjects()}>
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <RefreshCw className="h-4 w-4" aria-hidden />}
+                Aktualisieren
+              </Button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[820px] border-collapse text-left">
+                <thead>
+                  <tr className="border-b border-[var(--line)] text-xs uppercase text-[var(--text2)]">
+                    <th className="px-3 py-3 font-bold">Laden</th>
+                    <th className="px-3 py-3 font-bold">Auftrag</th>
+                    <th className="px-3 py-3 font-bold">Kunde</th>
+                    <th className="px-3 py-3 font-bold">Status</th>
+                    <th className="px-3 py-3 font-bold">Retour</th>
+                    <th className="px-3 py-3 font-bold">Aktion</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {projects.map((project) => {
+                    const meta = statusMeta(project.status);
+                    const selected = selectedProject?.id === project.id;
+                    return (
+                      <tr key={project.id} className={clsx("border-b border-[var(--line)] last:border-0", selected && "bg-[var(--bg2)]")}>
+                        <td className="px-3 py-4 font-medium">{formatDateTime(project.load_at)}</td>
+                        <td className="px-3 py-4">
+                          <strong>{project.name}</strong>
+                          <p className="text-xs text-[var(--text2)]">{project.location || "ohne Ort"}</p>
+                        </td>
+                        <td className="px-3 py-4">{project.client || "offen"}</td>
+                        <td className="px-3 py-4">
+                          <StatusBadge tone={meta.tone}>{meta.label}</StatusBadge>
+                        </td>
+                        <td className="px-3 py-4">{formatDateTime(project.return_at)}</td>
+                        <td className="px-3 py-4">
+                          <button className="font-bold text-[var(--text)] underline-offset-4 hover:underline" onClick={() => setSelectedId(project.id)}>
+                            Öffnen
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {!loading && projects.length === 0 ? (
+              <ListRow className="mt-3">
+                <strong>Noch kein Auftrag vorhanden</strong>
+                <p className="text-sm text-[var(--text2)]">Erfasse rechts den ersten Auftrag. Danach können wir Materialpositionen und Warnungen anbinden.</p>
+              </ListRow>
+            ) : null}
+          </Panel>
+
+          {selectedProject ? (
+            <Panel>
+              <SectionTitle icon={Settings} title="Statusfluss" detail={selectedProject.name} />
+              <WorkflowStrip current={selectedProject.status} />
+              <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+                <label>
+                  <span className="mb-1 block text-xs font-bold uppercase text-[var(--text2)]">Status setzen</span>
+                  <Select
+                    onChange={(event) => void updateStatus(selectedProject.id, event.target.value as ProjectStatusCode)}
+                    value={selectedProject.status}
+                  >
+                    {statusOptions.map((status) => (
+                      <option key={status.value} value={status.value}>
+                        {status.label}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+                <StatusBadge tone={statusMeta(selectedProject.status).tone}>{statusMeta(selectedProject.status).label}</StatusBadge>
+              </div>
+            </Panel>
+          ) : null}
+
+          <div className="grid gap-4 md:grid-cols-3">
+            <Panel>
+              <SectionTitle icon={AlertTriangle} title="Verfügbarkeit" />
+              <StatusBadge tone="warn">nächster Schritt</StatusBadge>
+              <p className="mt-3 text-sm text-[var(--text2)]">Warnungen werden aus Materialpositionen und Zeitfenster berechnet.</p>
+            </Panel>
+            <Panel>
+              <SectionTitle icon={ClipboardCheck} title="Rücknahme" />
+              <StatusBadge tone="warn">vorbereitet</StatusBadge>
+              <p className="mt-3 text-sm text-[var(--text2)]">Retour und Kontrolle hängen am Statusfluss und später an Scanlisten.</p>
+            </Panel>
+            <Panel>
+              <SectionTitle icon={FileText} title="Netto-Amortisation" />
+              <StatusBadge tone="neutral">ohne MwSt.</StatusBadge>
+              <p className="mt-3 text-sm text-[var(--text2)]">Berechnung folgt, sobald Eigenmaterialpositionen am Auftrag hängen.</p>
+            </Panel>
+          </div>
+        </div>
+
+        <Panel>
+          <SectionTitle icon={Plus} title="Auftrag erfassen" detail="Pflichtfelder: Auftrag, Laden, Retour" />
+          <form className="grid gap-3" onSubmit={handleSubmit}>
+            <label>
+              <span className="mb-1 block text-xs font-bold uppercase text-[var(--text2)]">Auftrag</span>
+              <Field onChange={(event) => setForm((value) => ({ ...value, name: event.target.value }))} placeholder="z.B. Corporate Event Basel" required value={form.name} />
+            </label>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
+              <label>
+                <span className="mb-1 block text-xs font-bold uppercase text-[var(--text2)]">Kunde</span>
+                <Field onChange={(event) => setForm((value) => ({ ...value, client: event.target.value }))} placeholder="optional" value={form.client} />
+              </label>
+              <label>
+                <span className="mb-1 block text-xs font-bold uppercase text-[var(--text2)]">Ort</span>
+                <Field onChange={(event) => setForm((value) => ({ ...value, location: event.target.value }))} placeholder="optional" value={form.location} />
+              </label>
+            </div>
+            <label>
+              <span className="mb-1 block text-xs font-bold uppercase text-[var(--text2)]">Status</span>
+              <Select onChange={(event) => setForm((value) => ({ ...value, status: event.target.value as ProjectStatusCode }))} value={form.status}>
+                {statusOptions.map((status) => (
+                  <option key={status.value} value={status.value}>
+                    {status.label}
+                  </option>
+                ))}
+              </Select>
+            </label>
+
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
+              <label>
+                <span className="mb-1 block text-xs font-bold uppercase text-[var(--text2)]">Event Beginn</span>
+                <Field onChange={(event) => setForm((value) => ({ ...value, eventStartAt: event.target.value }))} type="datetime-local" value={form.eventStartAt} />
+              </label>
+              <label>
+                <span className="mb-1 block text-xs font-bold uppercase text-[var(--text2)]">Event Ende</span>
+                <Field onChange={(event) => setForm((value) => ({ ...value, eventEndAt: event.target.value }))} type="datetime-local" value={form.eventEndAt} />
+              </label>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
+              <label>
+                <span className="mb-1 block text-xs font-bold uppercase text-[var(--text2)]">Packen</span>
+                <Field onChange={(event) => setForm((value) => ({ ...value, packAt: event.target.value }))} type="datetime-local" value={form.packAt} />
+              </label>
+              <label>
+                <span className="mb-1 block text-xs font-bold uppercase text-[var(--text2)]">Laden</span>
+                <Field onChange={(event) => setForm((value) => ({ ...value, loadAt: event.target.value }))} required type="datetime-local" value={form.loadAt} />
+              </label>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
+              <label>
+                <span className="mb-1 block text-xs font-bold uppercase text-[var(--text2)]">Retour</span>
+                <Field onChange={(event) => setForm((value) => ({ ...value, returnAt: event.target.value }))} required type="datetime-local" value={form.returnAt} />
+              </label>
+              <label>
+                <span className="mb-1 block text-xs font-bold uppercase text-[var(--text2)]">Kontrolle bis</span>
+                <Field onChange={(event) => setForm((value) => ({ ...value, checkDueAt: event.target.value }))} type="datetime-local" value={form.checkDueAt} />
+              </label>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <label>
+                <span className="mb-1 block text-xs font-bold uppercase text-[var(--text2)]">Rabatt %</span>
+                <Field onChange={(event) => setForm((value) => ({ ...value, discountPercent: event.target.value }))} value={form.discountPercent} />
+              </label>
+              <label>
+                <span className="mb-1 block text-xs font-bold uppercase text-[var(--text2)]">MwSt. %</span>
+                <Field onChange={(event) => setForm((value) => ({ ...value, vatRate: event.target.value }))} value={form.vatRate} />
+              </label>
+            </div>
+
+            <label>
+              <span className="mb-1 block text-xs font-bold uppercase text-[var(--text2)]">Notiz</span>
+              <Field onChange={(event) => setForm((value) => ({ ...value, notes: event.target.value }))} placeholder="optional" value={form.notes} />
+            </label>
+
+            <Button disabled={saving || !profile} type="submit" variant="primary" className="inline-flex items-center justify-center gap-2">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <CalendarClock className="h-4 w-4" aria-hidden />}
+              {saving ? "Speichern..." : "Auftrag speichern"}
+            </Button>
+          </form>
+
+          {message ? (
+            <div className="mt-4 rounded-lg border border-[var(--line)] bg-[var(--bg2)] p-3 text-sm text-[var(--text2)]">{message}</div>
+          ) : null}
+        </Panel>
+      </div>
+    </>
+  );
+}
